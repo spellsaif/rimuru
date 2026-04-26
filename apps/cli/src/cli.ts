@@ -436,9 +436,23 @@ async function channel(args: readonly string[]): Promise<void> {
     const local = await readLocalConfig();
     const circles = Array.isArray(local.circles) ? local.circles.filter((circle) => !isRecord(circle) || circle.name !== name) : [];
     await writeLocalConfig({ ...local, circles });
+    
+    // Deep Clean: Remove auth/data directory if requested
+    if (args.includes("--clean")) {
+      const { rm } = await import("node:fs/promises");
+      const circleDir = resolve(process.cwd(), ".rimuru", "circles", name);
+      try {
+        await rm(circleDir, { recursive: true, force: true });
+        process.stdout.write(paint(`✔ Deep cleaned data for ${name}\n`, ansi.gray));
+      } catch (e) {
+        /* ignore if dir doesn't exist */
+      }
+    }
+
     process.stdout.write(`${JSON.stringify({ removed: name }, null, 2)}\n`);
     return;
   }
+
   if (subcommand === "send") {
     const target = name ?? "local";
     if (target === "local") {
@@ -988,10 +1002,11 @@ function parseBarrierArg(value: string): "none" | "readonly" | "docker" {
   throw new Error(`Unsupported barrier: ${value}`);
 }
 
-function parseCircleKind(value: string): "local" | "webhook" | "telegram" | "slack" | "discord" {
-  if (value === "local" || value === "webhook" || value === "telegram" || value === "slack" || value === "discord") return value;
+function parseCircleKind(value: string): "local" | "webhook" | "telegram" | "slack" | "discord" | "whatsapp" {
+  if (value === "local" || value === "webhook" || value === "telegram" || value === "slack" || value === "discord" || value === "whatsapp") return value;
   throw new Error(`Unsupported Circle kind: ${value}`);
 }
+
 
 function parseArtifactKind(value: string): "markdown" | "html" | "text" | "json" {
   if (value === "markdown" || value === "html" || value === "text" || value === "json") return value;

@@ -1,7 +1,7 @@
 import { stdin as defaultInput, stdout as defaultOutput } from "node:process";
 import type { ReadStream, WriteStream } from "node:tty";
 import type { Flow, FlowBus, Sovereign, JsonChronicle, JsonTraceStore } from "@rimuru/core";
-import { ansi, paint, stripAnsi, fileLink, getTermWidth } from "./ansi.js";
+import { ansi, paint, stripAnsi, fileLink, getTermWidth, paintMarkdown } from "./ansi.js";
 
 export interface TuiState {
   readonly sessionId: string;
@@ -120,28 +120,36 @@ export async function runInteractiveTui(options: InteractiveTuiOptions): Promise
 }
 
 function renderTui(state: TuiState, width: number, height: number): string {
-  const sidebarWidth = Math.floor(width * 0.3);
-  const chatWidth = width - sidebarWidth - 4;
-  const bodyHeight = height - 6;
-
+  const bodyHeight = height - 5;
   const header = paint(` RIMURU SESSIONS ❯ ${state.sessionId} (${state.model})`, ansi.bgCyan, ansi.black, ansi.bold);
   const info = paint(` Workspace: ${fileLink(state.workspace)}`, ansi.gray, ansi.dim);
   const divider = paint("─".repeat(width), ansi.gray);
 
-  const chatLines = renderChat(state.transcript, chatWidth, bodyHeight);
-  const logLines = renderLogs(state.events, sidebarWidth, bodyHeight);
-
+  // Render Chat at full width
+  const chatLines = renderChat(state.transcript, width - 4, bodyHeight);
+  
+  // Render Logs as a small floating box in top right
+  const logLines = renderLogs(state.events, 40, 5);
+  
   const lines: string[] = [];
   for (let i = 0; i < bodyHeight; i++) {
-    const chat = pad(chatLines[i] ?? "", chatWidth);
-    const log = pad(logLines[i] ?? "", sidebarWidth);
-    lines.push(` ${chat} ${paint("│", ansi.gray)} ${log}`);
+    let chat = chatLines[i] ?? "";
+    
+    // Overlay logs in the top right if within the first 5 lines
+    if (i >= 0 && i < logLines.length) {
+      const log = logLines[i];
+      const visibleChat = stripAnsi(chat);
+      const padding = Math.max(0, width - stripAnsi(chat).length - stripAnsi(log).length - 4);
+      chat = chat + " ".repeat(padding) + log;
+    }
+    
+    lines.push(` ${chat}`);
   }
 
   const footer = renderFooter(state, width);
-
   return [header, info, divider, ...lines, divider, footer].join("\n");
 }
+
 
 function renderChat(items: TuiState["transcript"], width: number, height: number): string[] {
   const lines: string[] = [];
@@ -149,41 +157,49 @@ function renderChat(items: TuiState["transcript"], width: number, height: number
     const isUser = item.role === "user";
     const prefix = isUser ? paint(" YOU ", ansi.bgWhite, ansi.black) : paint(" RIMURU ", ansi.bgGreen, ansi.black);
     const content = item.content || "...";
-
+    
     lines.push(prefix);
-    const contentLines = wrap(content, width - 4);
-    lines.push(...contentLines.map(l => "  " + l));
+    
+    // Apply markdown BEFORE wrapping so styles don't break across lines
+    const styledContent = paintMarkdown(content);
+    const contentLines = wrap(styledContent, width - 4);
+    
+    for (const line of contentLines) {
+      lines.push("  " + line);
+    }
     lines.push("");
   }
   return lines.slice(-height);
 }
 
+
 function renderLogs(events: readonly Flow[], width: number, height: number): string[] {
-  const lines: string[] = [paint(" LOGS ❯", ansi.bold, ansi.white), ""];
-  for (const e of events.slice(-height + 2)) {
-    const time = e.at.toISOString().slice(11, 19);
+  if (events.length === 0) return [];
+  const lines: string[] = [paint(" EVENTS HUD ", ansi.bgYellow, ansi.black, ansi.bold)];
+  
+  for (const e of events.slice(-height + 1)) {
     const type = e.type.split(".")[1] || e.type;
     let icon = "•";
     let color: string = ansi.gray;
 
-
     if (e.type.startsWith("rune.")) {
-      icon = "⚡";
-      color = ansi.yellow;
+        icon = "⚡";
+        color = ansi.yellow;
     } else if (e.type.startsWith("run.")) {
-      icon = "🌀";
-      color = ansi.cyan;
+        icon = "🌀";
+        color = ansi.cyan;
     } else if (e.type === "thought.emitted") {
-      icon = "🧠";
-      color = ansi.magenta;
-      lines.push(`${paint(icon, color)} ${paint(time, ansi.gray)} ${paint(wrap(e.thought, width - 11)[0], ansi.italic)}`);
-      continue;
+        icon = "🧠";
+        color = ansi.magenta;
+        lines.push(paint(`${icon} ${type.toUpperCase()}`, color));
+        continue;
     }
 
-    lines.push(`${paint(icon, color)} ${paint(time, ansi.gray)} ${type.toUpperCase()}`);
+    lines.push(paint(`${icon} ${type.toUpperCase()}`, color));
   }
   return lines;
 }
+
 
 function renderFooter(state: TuiState, width: number): string {
   const isThinking = state.mode === "thinking";
@@ -202,18 +218,28 @@ function renderFooter(state: TuiState, width: number): string {
 
 function wrap(text: string, width: number): string[] {
   const lines: string[] = [];
-  const words = text.split(" ");
-  let current = "";
+  const paragraphs = text.split("\n");
 
-  for (const word of words) {
-    if (stripAnsi(current + word).length > width) {
-      lines.push(current);
-      current = word + " ";
-    } else {
-      current += word + " ";
+  for (const paragraph of paragraphs) {
+    if (!paragraph.trim()) {
+      lines.push("");
+      continue;
     }
+
+    const words = paragraph.split(" ");
+    let current = "";
+
+    for (const word of words) {
+      const lineWithWord = current ? current + " " + word : word;
+      if (stripAnsi(lineWithWord).length > width) {
+        if (current) lines.push(current);
+        current = word;
+      } else {
+        current = lineWithWord;
+      }
+    }
+    if (current) lines.push(current);
   }
-  if (current) lines.push(current);
   return lines;
 }
 

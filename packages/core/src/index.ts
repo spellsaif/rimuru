@@ -1,7 +1,9 @@
 export { FlowBus } from "./core/events.js";
 export { appendAuditEvent, auditLogPath, listAuditEvents } from "./core/audit.js";
 export { createCanvasArtifact, listCanvasArtifacts, readCanvasArtifact } from "./canvas/canvas.js";
-export { circleByName, getCircleAdapter, listCircles, normalizeLocalCircleMessage } from "./circles/circles.js";
+export { circleByName, getCircleAdapter, listCircles, normalizeLocalCircleMessage, registerCircleAdapter } from "./circles/circles.js";
+export { WHATSAPP_ADAPTER } from "./circles/whatsapp.js";
+
 export { JsonChronicle, MemoryChronicle } from "./core/chronicle.js";
 export { ApprovalPermissionPolicy, readOnlyPolicy, StaticPermissionPolicy, trustedLocalPolicy } from "./core/permissions.js";
 export { JsonTraceStore } from "./core/trace.js";

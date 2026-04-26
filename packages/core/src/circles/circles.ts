@@ -24,7 +24,9 @@ export interface CircleAdapter {
   readonly kind: string;
   normalize(circle: CircleConfig, body: Record<string, unknown>): CircleMessage | { readonly challenge?: string; readonly pong?: boolean } | undefined;
   send?(circle: CircleConfig, chatId: string, text: string): Promise<void>;
+  start?(circle: CircleConfig, context: { workspace: string; flowBus: FlowBus }): Promise<void>;
 }
+
 
 export const TELEGRAM_ADAPTER: CircleAdapter = {
   kind: "telegram",
@@ -75,15 +77,21 @@ export const DISCORD_ADAPTER: CircleAdapter = {
   }
 };
 
-const ADAPTERS: Record<string, CircleAdapter> = {
-  telegram: TELEGRAM_ADAPTER,
-  slack: SLACK_ADAPTER,
-  discord: DISCORD_ADAPTER
-};
+const ADAPTERS: Map<string, CircleAdapter> = new Map();
+
+export function registerCircleAdapter(adapter: CircleAdapter): void {
+  ADAPTERS.set(adapter.kind, adapter);
+}
+
+// Register default adapters
+registerCircleAdapter(TELEGRAM_ADAPTER);
+registerCircleAdapter(SLACK_ADAPTER);
+registerCircleAdapter(DISCORD_ADAPTER);
 
 export function getCircleAdapter(kind: string): CircleAdapter | undefined {
-  return ADAPTERS[kind];
+  return ADAPTERS.get(kind);
 }
+
 
 export function listCircles(config: RuntimeConfig): readonly CircleSummary[] {
   return normalizedCircles(config).map((circle) => ({
@@ -115,8 +123,10 @@ function normalizedCircles(config: RuntimeConfig): readonly CircleConfig[] {
 
 function endpointFor(circle: CircleConfig): string {
   if (["telegram", "slack", "discord"].includes(circle.kind)) return `/circles/${circle.name}/${circle.kind}`;
+  if (circle.kind === "whatsapp") return "/circles/whatsapp/status";
   return `/circles/${circle.name}/message`;
 }
+
 
 function readRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;

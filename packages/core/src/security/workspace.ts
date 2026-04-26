@@ -7,8 +7,16 @@ export function resolveWorkspacePath(workspace: string, path: string): string {
   if (rel === "" || rel.startsWith("..") || rel.includes(`..${sep}`)) {
     throw new Error(`Path escapes workspace: ${path}`);
   }
+
+  // Sovereign Blindspot: Forbid AI from reading its own internal secrets
+  const sensitivePaths = [".rimuru/circles", ".rimuru/vault.json", "rimuru.config.json"];
+  if (sensitivePaths.some(p => rel === p || rel.startsWith(`${p}${sep}`))) {
+    throw new Error(`Access to sensitive Sovereign internal path denied: ${rel}`);
+  }
+
   return resolved;
 }
+
 
 export function assertCommandName(command: string): void {
   if (!/^[a-zA-Z0-9._-]+$/.test(command)) {

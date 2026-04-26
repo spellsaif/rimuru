@@ -10,7 +10,10 @@ import {
   listCircles, 
   normalizeLocalCircleMessage, 
   getCircleAdapter, 
+  registerCircleAdapter,
+  WHATSAPP_ADAPTER,
   type CircleMessage,
+
   listAuditEvents,
   JsonChronicle,
   FlowBus,
@@ -109,8 +112,10 @@ export async function createGateHttpServer(options: GateServerOptions): Promise<
   });
 
   setupRituals(options, flowBus);
+  setupCircles(options, flowBus);
   return server;
 }
+
 
 /**
  * Simplified dispatcher that replaces the giant if/else block.
@@ -789,3 +794,23 @@ function setupRituals(options: GateServerOptions, flowBus: FlowBus) {
   }, 60_000);
   ritualTimer.unref();
 }
+
+function setupCircles(options: GateServerOptions, flowBus: FlowBus) {
+  // Register WhatsApp adapter
+  registerCircleAdapter(WHATSAPP_ADAPTER);
+
+  // Initialize active circles
+  const circles = listCircles(options.config);
+  for (const c of circles) {
+    const config = circleByName(options.config, c.name);
+    if (!config || !config.enabled) continue;
+    
+    const adapter = getCircleAdapter(config.kind);
+    if (adapter?.start) {
+      void adapter.start(config, { workspace: options.workspace, flowBus }).catch(err => {
+        console.error(`[gate] Failed to start active circle ${config.name}:`, err);
+      });
+    }
+  }
+}
+
