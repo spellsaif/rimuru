@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "sourceMap": true,
+    "isolatedModules": true,
+    "types": ["node"],
+    "paths": {
+      "@rimuru/core": ["./packages/core/src/index.ts"],
+      "@rimuru/gate": ["./packages/gate/src/index.ts"],
+      "@rimuru/vault": ["./packages/vault/src/vault.ts"]
+    }
+  }
+}
