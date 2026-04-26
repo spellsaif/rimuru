@@ -1,127 +1,46 @@
 ---
-title: Safety
-description: Rimuru's permission model, Vows, Pacts, Barriers, rollback, pairing, and Vault.
+title: Security & Isolation
+description: Documentation of the Sovereign Blindspot and permission gating.
 ---
 
-# Safety
+# Security & Isolation
 
-Rimuru treats assistant power as a permissioned system.
+The cornerstone of Rimuru's safety is the **Sovereign Blindspot**. This ensures that the AI assistant remains "blind" to your most sensitive secrets, even while it has the power to manage your code.
 
-The default Vow is read-only.
+## The Sovereign Blindspot
 
-## Rune Risks
+This is a hard-coded blockade within the file-handling engine that ensures the AI can never "see" its own session keys or your encrypted Vault.
 
-Every Rune declares one risk class:
+### Path-Level Isolation
+The file-system Runes (`readFile`, `listDir`, `editFile`) are hard-coded to reject any path inside the `.rimuru/` directory. 
+- **WhatsApp Protection**: The session keys for your WhatsApp connection live in `.rimuru/circles/whatsapp`. The AI can never read these.
+- **Vault Protection**: The AI can never see the `vault.json` file.
 
-| Risk | Meaning |
-| --- | --- |
-| `read` | File reads, searches, Git status, memory lookup |
-| `write` | File edits, patches, memory writes, artifact writes |
-| `execute` | Shell commands and test runners |
-| `network` | External network calls |
+## The Permission Vows
 
-Runes are denied unless their risk is allowed by the active policy.
+Runes are classified by risk levels. Every interaction is gated by a **Vow Check**.
 
-## Vows
+| Risk Level | Description | Example Tools |
+| :--- | :--- | :--- |
+| **`read`** | Safe. Reading files or listing directories. | `readFile`, `listDir` |
+| **`write`** | Moderate risk. Editing files or committing to Git. | `editFile`, `gitCommit` |
+| **`execute`** | High risk. Running terminal commands or scripts. | `runCommand`, `bash` |
+| **`network`** | High risk. Making external API calls beyond the LLM shard. | `curl`, `fetch` |
 
-Vows are configured allowed risks.
+## The Fortress: Encrypted Vault Architecture
 
-```sh
-RIMURU_ALLOW_RISKS=read,write rimuru agent "prepare a safe patch"
-```
+Security is not just about blocking access; it's about robust encryption. The Rimuru Vault is a sovereign fortress for your API credentials.
 
-Or in `rimuru.config.json`:
+### Encryption Standards
+- **Algorithm**: AES-256-GCM (Galois/Counter Mode).
+- **Key Derivation**: We use Argon2 for high-memory-cost key derivation, protecting your master key from brute-force attacks.
+- **Storage**: Secrets are stored in `vault.json`, but they are never readable without the runtime's cryptographic context.
 
-```json
-{
-  "vows": ["read", "write"]
-}
-```
+### Access Control
+When a Rune needs an API key (e.g., to talk to Anthropic), it doesn't read the key itself. Instead, it requests a **Secret Resolve** from the Vault. The Vault verifies the Rune's risk profile and only then provides the decrypted token for the duration of the network request.
 
-## Pacts
+## Redacted Audit Traces
 
-Pacts are interactive approvals.
-
-```sh
-RIMURU_APPROVALS=1 rimuru agent "run the tests"
-RIMURU_APPROVALS=1 rimuru gate start --approvals
-```
-
-When a denied risk is requested, Rimuru prompts for approval instead of silently executing.
-
-Gate exposes pending Pacts through Room and HTTP:
-
-```sh
-curl http://127.0.0.1:19710/approvals
-```
-
-Approve for one call or for the session:
-
-```sh
-curl -X POST http://127.0.0.1:19710/approvals/<id>/approve \
-  -H 'Content-Type: application/json' \
-  -d '{"scope":"session"}'
-```
-
-## Audit Log
-
-Audited Rune paths write redacted JSONL records to `.rimuru/audit.jsonl`.
-
-```sh
-curl http://127.0.0.1:19710/audit?limit=25
-```
-
-Audit events show requested, allowed, denied, completed, and failed Rune calls with session, risk, decision reason, and redacted input/output previews.
-
-## Barriers
-
-Barrier modes control command execution:
-
-| Barrier | Behavior |
-| --- | --- |
-| `none` | Execute directly in the workspace |
-| `readonly` | Deny command execution |
-| `docker` | Run commands in a read-only, network-disabled container |
-
-```sh
-RIMURU_ALLOW_RISKS=read,execute RIMURU_SANDBOX=readonly rimuru rune workspace.shell '{"command":"node","args":["--version"]}'
-```
-
-## Rollback
-
-Patch edits create rollback records under `.rimuru/rollbacks`.
-
-```sh
-rimuru rollback list
-rimuru rollback inspect <id>
-rimuru rollback apply <id>
-```
-
-## Pairing
-
-Unknown non-local Circle senders are paired by default.
-
-```sh
-rimuru pairing list
-rimuru pairing approve <code>
-```
-
-## Vault
-
-Vault stores secrets encrypted locally.
-
-```sh
-rimuru vault set TELEGRAM_BOT_TOKEN <token>
-rimuru vault list
-rimuru vault get TELEGRAM_BOT_TOKEN
-```
-
-Use `RIMURU_VAULT_KEY` to control the encryption key source.
-
-## Doctor Diagnostics
-
-```sh
-rimuru doctor --json
-```
-
-Doctor warns about missing provider keys, powerful Vows without a Barrier, Circle token issues, and pairing requirements.
+Rimuru generates `traces` (JSON files) for every interaction. These are vital for debugging but could contain secrets. Rimuru's tracing engine automatically redacts:
+- Any string matching an entry in your **Vault**.
+- Any absolute file paths that reveal your system's username.

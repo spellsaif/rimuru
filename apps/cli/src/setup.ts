@@ -1,9 +1,20 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import * as p from "@clack/prompts";
 import chalk from "chalk";
-import type { CircleConfig, ProviderKind } from "@rimuru/core";
+import { 
+  type CircleConfig, 
+  type ProviderKind,
+  FlowBus,
+  JsonChronicle,
+  JsonTraceStore,
+  Sovereign,
+  createShard,
+  loadRuntimeConfig
+} from "@rimuru/core";
 import { setVaultSecret } from "@rimuru/vault";
+import { runInteractiveTui } from "./interactive.js";
+import { ansi } from "./ansi.js";
 
 export interface SetupOptions {
   readonly workspace: string;
@@ -177,7 +188,31 @@ export async function setupWorkspaceInteractive(options: Pick<SetupOptions, "wor
     "Next Steps"
   );
 
-  p.outro(`Run ${chalk.cyan("rimuru dash")} to begin.`);
+  p.outro(`Run ${chalk.cyan("rimuru dash")} to see the live dashboard.`);
+
+  // --- SEAMLESS HANDOVER TO TUI ---
+  const startChat = await p.confirm({
+    message: "Would you like to start talking to Rimuru now?",
+    initialValue: true
+  });
+
+  if (startChat && !p.isCancel(startChat)) {
+    process.stdout.write(ansi.clear);
+    const config = await loadRuntimeConfig({ workspace: options.workspace });
+    const flowBus = new FlowBus();
+    const chronicle = new JsonChronicle(resolve(config.memoryDir));
+    
+    await runInteractiveTui({
+      sovereign: new Sovereign({ shard: createShard(config), chronicle, flowBus }),
+      flowBus,
+      chronicle,
+      traceStore: new JsonTraceStore(resolve(options.workspace, ".rimuru", "traces")),
+      workspace: options.workspace,
+      sessionId: config.sessionId,
+      provider: config.provider,
+      model: config.model
+    });
+  }
 
   return result;
 }

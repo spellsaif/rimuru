@@ -1,72 +1,50 @@
 ---
-title: Introduction
-description: What Rimuru is, why it exists, and how the platform fits together.
+title: The Sovereign Manifesto
+description: Defining the philosophy and domain language of the Rimuru Runtime.
 ---
 
-# Rimuru
+# The Sovereign Manifesto
 
-Rimuru is a safe, auditable, local-first AI assistant platform.
+> **"Privacy is a human right. Sovereignty is a technical choice."**
 
-It exists for people who want an assistant that can grow into a personal AI gateway without becoming hidden magic. Rimuru gives you a clean runtime, typed tools, persistent memory, channel ingress, traces, plugins, scheduled tasks, artifacts, and a web dashboard.
+Rimuru is a high-performance, local-first AI assistant runtime designed for maximum **Sovereignty, Auditability, and Security**. It operates as a modular orchestration kernel that lives entirely within your local workspace, ensuring your data, secrets, and communications never leave your physical control.
 
-## The Short Version
+## The Rise of Digital Feudalism
 
-Rimuru is built around a few clear ideas:
+In the modern era, AI has become the most powerful tool for human productivity. However, this power has come at a steep cost. Most modern AI assistants are built on a "Cloud-First" model, which we call **Digital Feudalism**. In this model:
 
-- **Gate** is the local HTTP and server-sent-events control plane.
-- **Sovereign** is the runtime core that coordinates model calls, tools, memory, and events.
-- **Runes** are typed tools with explicit risk classes.
-- **Chronicle** is session and semantic memory.
-- **Sage** is the trace/audit layer.
-- **Circles** connect Rimuru to local webhooks, Telegram, Slack, Discord-style bridges, and future channels.
-- **Vows** and **Pacts** keep powerful actions explicit.
+1. **You are a Tenant**: You do not own the tools you use; you lease them.
+2. **Your Data is the Rent**: To get utility, you must stream your most sensitive code, thoughts, and private messages to remote servers.
+3. **The Black Box**: You have no visibility into how your data is processed, stored, or used for training.
 
-## Why It Exists
+## The Sovereign Alternative
 
-Modern personal assistant systems are powerful, but they often become difficult to trust:
+Rimuru is a rejection of this model. It is built on the belief that **Individual Sovereignty** is the only safe way to interact with artificial intelligence. By bringing the AI to the data—rather than the data to the AI—Rimuru restores the traditional relationship between a craftsman and their tools.
 
-- Tool calls are hard to audit.
-- Permission boundaries are unclear.
-- Memory is hidden.
-- Provider logic leaks into orchestration.
-- Channel integrations grow into a tangled platform.
+### The Three Pillars of Sovereignty
 
-Rimuru takes the opposite path. The runtime is small, the extension points are typed, the defaults are conservative, and the product language maps directly to the architecture.
+- **Local-First Execution**: The "Brain" of the system is on your desk, not in a data center. All memory, secret storage (Vault), and tool execution occur locally.
+- **Hardened Boundaries**: The AI is a guest in your workspace. It can only see what you allow and only touch what you approve via the **Vow** system.
+- **Absolute Auditability**: Trust but verify. Rimuru records every thought, action, and tool output in an immutable event stream (**Flow**), providing a perfect audit trail.
 
-## What You Can Use It For
+---
 
-- Run a local assistant over CLI, TUI, Gate API, or Room dashboard.
-- Ask coding questions about a repository.
-- Search files and inspect Git state through Runes.
-- Apply safe patches with rollback records.
-- Queue HTTP Pacts for risky Rune calls and review audit events.
-- Keep session history and semantic memory locally.
-- Expose the assistant through Circle webhooks.
-- Pair/approve inbound senders before processing untrusted messages.
-- Store secrets in the local Vault.
-- Schedule recurring prompts with Rituals.
-- Save generated markdown, HTML, text, or JSON artifacts in Canvas.
+## The Grand Dictionary
 
-## Design Promise
+To master Rimuru, you must speak the language of the Sovereign:
 
-Rimuru optimizes for trust over spectacle.
-
-The platform should be understandable by reading the code. Every provider, tool, memory backend, channel adapter, and plugin should have a clear boundary.
-
-## Next Step
-
-Start with the installation guide.
-
-```sh
-npm install -g rimuru
-rimuru setup --wizard
-rimuru gate start --approvals
-```
-
-Then open the Room dashboard:
-
-```text
-http://127.0.0.1:19710/room
-```
-
-For copyable starter files, see the examples and templates guide.
+| Term | Technical Definition |
+| :--- | :--- |
+| **Sovereign** | The central orchestration engine. It manages the agentic loop and state. |
+| **Shard** | A standardized bridge for LLM providers (OpenAI, Anthropic, Gemini, Ollama). |
+| **Rune** | A typed, permission-gated tool contract (e.g., `workspace.readFile`). |
+| **Vessel** | A specific agent instance (a Soul bound to a Shard and Vows). |
+| **Soul** | The personality and core mission of the agent, defined in `SOUL.md`. |
+| **Vow** | A permission (read, write, execute, network) granted to an agent. |
+| **Chronicle** | A high-fidelity conversation log and session memory. |
+| **Flow** | An immutable event stream providing 100% observability of internal states. |
+| **Circle** | A bridge to an external communication platform (e.g., WhatsApp). |
+| **Vault** | An AES-256 encrypted local store for API keys and workspace secrets. |
+| **Ritual** | A background automation task scheduled to run periodically. |
+| **Canvas** | A persistent document (Markdown/HTML) managed and edited by the AI. |
+| **Barrier** | The security mode of the runtime (none, readonly, or docker-sandboxed). |

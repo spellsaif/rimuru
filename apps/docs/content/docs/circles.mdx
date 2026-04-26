@@ -1,113 +1,38 @@
 ---
-title: Circles
-description: Configure local, webhook, Telegram, Slack, and Discord-compatible Circle channel ingress.
+title: Sovereign Circles
+description: Connecting Rimuru to your personal communication platforms.
 ---
 
-# Circles
+# Sovereign Circles
 
-Circles connect Rimuru to external channels.
+Circles bridge Rimuru to your personal messaging apps without sacrificing privacy. They act as "Sovereign Nodes" in your communication network.
 
-Current Circle support includes:
+## The WhatsApp Sovereign Node
 
-- local messages
-- generic webhooks
-- Telegram webhook normalization
-- Slack Events API normalization
-- Discord-compatible event normalization
+The WhatsApp Circle is our flagship communication bridge. It allows you to carry your Sovereign AI in your pocket without exposing your data to the world.
 
-## List Circles
+### Strict Privacy Logic
 
-```sh
-rimuru channel list
-rimuru circle list
-```
+Unlike other WhatsApp bots that listen to every group and contact, Rimuru is **Hard-Locked** to you.
 
-## Local Circle
+1. **`isMe` Verification**: Rimuru uses the WhatsApp `isMe` property to ensure it ONLY replies to the account owner.
+2. **Private "You" Chat**: It is designed to work in your own private thread (the chat where you can message yourself).
+3. **Silent by Default**: It will never see, log, or reply to your friends, family, or work groups.
+4. **Recursive Loop Prevention**: In self-chats, the bot is the "same" identity as the user. Rimuru uses advanced text-fingerprinting and ID-tracking to ensure it doesn't enter an infinite reply loop with itself.
 
-```sh
-rimuru channel send local "hello from the CLI"
-```
+### High-Speed Interaction
 
-Gate endpoint:
+- **Direct Signal**: Real-time "Typing..." indicators are signaled directly to your phone while the AI is reasoning locally.
+- **QR Pairing**: Access is granted via a one-time QR scan. Because you've already authenticated via QR, Rimuru bypasses secondary pairing codes for your own private chat.
 
-```text
-POST /circles/local/message
-```
+## Technical Implementation
 
-## Generic Webhook
+Circles are managed by the **Gate Server**. When a message arrives at the Gate:
+1. The Gate Normalizes the message into a standard `Flow` event.
+2. The Kernel processes the event and determines if a response is needed.
+3. The response is formatted for the specific platform (e.g., converting Markdown to WhatsApp syntax) and sent back through the Gate.
 
-```sh
-rimuru channel add webhook buildbot --allow alice,bob
-```
-
-Gate endpoint:
-
-```text
-POST /circles/buildbot/message
-```
-
-Payload:
-
-```json
-{
-  "from": "alice",
-  "message": "summarize the build failure"
-}
-```
-
-## Telegram
-
-```sh
-rimuru channel add telegram telegram --token-env TELEGRAM_BOT_TOKEN
-```
-
-Configure Telegram to POST updates to:
-
-```text
-https://<your-host>/circles/telegram/telegram
-```
-
-If `TELEGRAM_BOT_TOKEN` is set, Rimuru can send the response back through Telegram's `sendMessage` API.
-
-## Slack
-
-```sh
-rimuru channel add slack slack --token-env SLACK_BOT_TOKEN
-```
-
-Configure Slack Events API to POST to:
-
-```text
-https://<your-host>/circles/slack/slack
-```
-
-Slack URL verification challenges are handled by the Gate endpoint.
-
-## Discord-Compatible Bridges
-
-```sh
-rimuru channel add discord discord
-```
-
-Configure your Discord bridge or bot to POST message payloads to:
-
-```text
-https://<your-host>/circles/discord/discord
-```
-
-Discord ping-style payloads are answered with `{ "type": 1 }`.
-
-## Pairing and Allowlist
-
-For non-local Circles, unknown senders require pairing unless `allowFrom` includes the sender or `*`.
-
-```sh
-rimuru pairing list
-rimuru pairing approve <code>
-```
-
-## Security Advice
-
-Treat every inbound channel message as untrusted input.
-
-Keep write/execute Vows off for channel-facing Vessels unless there is a strong reason and a Barrier is configured.
+### Supported Adapters
+- **WhatsApp**: Fully hardened and sovereign-ready.
+- **Slack**: (Experimental) For workspace automation.
+- **Telegram**: (In Development) Focusing on encrypted chat support.

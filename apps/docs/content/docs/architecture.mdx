@@ -1,68 +1,73 @@
 ---
-title: Architecture
-description: How Rimuru's Gate, Sovereign, Shards, Runes, Chronicles, Flow, and Circles fit together.
+title: System Architecture
+description: A deep-dive into the tiered isolation model of the Rimuru Runtime.
 ---
 
-# Architecture
+# System Architecture
 
-Rimuru is designed as a small core with explicit seams.
+Rimuru is engineered as a layered ecosystem, where each layer acts as a firewall for the next. This ensures that even if an AI model "hallucinates" a destructive command, the system boundaries prevent it from executing without permission.
+
+## System Blueprint
+
+The following diagram visualizes the data flow from your devices down to the Sovereign kernel.
 
 ```text
-Circle / CLI / TUI / Room
-        ↓
-      Gate
-        ↓
-    Sovereign
-   ↙    ↓     ↘
-Shard  Rune  Chronicle
-        ↓
-      Flow → Sage Trace
+┌─────────────────────────────────────────────────────────────┐
+│                 COMMUNICATION LAYER (CIRCLES)               │
+│   ┌───────────┐    ┌───────────┐    ┌───────────┐           │
+│   │ WhatsApp  │    │  CLI TUI  │    │  Web UI   │           │
+│   └─────┬─────┘    └─────┬─────┘    └─────┬─────┘           │
+└─────────┼────────────────┼────────────────┼─────────────────┘
+          │                │                │
+          ▼                ▼                ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 THE GATE (SOVEREIGN GATEWAY)                │
+│    Pairing & Encryption  •  SSE Streaming  •  API Server    │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 SOVEREIGN KERNEL (THE CORE)                 │
+│   Reasoning Loop  •  Planning  •  Memory Indexing  •  Flow  │
+└─────┬────────────────────────┬────────────────────────┬─────┘
+      │                        │                        │
+┌─────▼────────┐        ┌──────▼───────┐        ┌───────▼─────┐
+│    SHARDS    │        │  CHRONICLE   │        │    RUNES    │
+│ LLM Adapters │        │ Session Hist │        │ Gated Tools │
+└─────┬────────┘        └──────┬───────┘        └───────┬─────┘
+      │                        │                        │
+      ▼                        ▼                        ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    LOCAL WORKSPACE & VAULT                  │
+│    Codebase  •  Encrypted Secrets  •  Semantic Memory       │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Gate
+## The Tiers of Isolation
 
-Gate is the local control plane. It exposes HTTP and server-sent-events endpoints for chat, agents, sessions, Runes, traces, Circles, Vault, Rituals, and Canvas.
+### 1. The Perimeter (Circles)
+External adapters that normalize messages from apps like WhatsApp or Slack into the Rimuru Flow format. Circles are **Passive** (only sending events) until they are authenticated.
 
-Gate writes `.rimuru/gate-state.json` while running so operators can inspect runtime status.
+### 2. The Fortress (The Gate)
+A high-performance HTTP/SSE server that handles the pairing of remote devices. It is the only component exposed to the network. The Gate manages **Identity Handshakes** and ensures that only authorized clients can talk to the kernel.
 
-## Sovereign
+### 3. The Kernel (The Core)
+The orchestration engine. It manages the **ReAct (Reason+Act)** cycle, planning objectives and maintaining session state. The Kernel is the only component with the "Intelligence" to decide which tools to use.
 
-Sovereign is the orchestration kernel. It loads Chronicle history, builds the message list, calls a Shard, appends messages back to memory, and emits Flow events.
+### 4. The Execution Layer (Runes & Shards)
+Isolated plugins. 
+- **Runes** are the "Hands" (tools) that interact with your local files and system.
+- **Shards** are the "Voice" (LLM connections) that bridge the local kernel to model providers.
 
-## Shards
+## The ReAct Execution Engine
 
-Shards isolate provider behavior. Rimuru supports:
+Rimuru does not operate on simple "Request-Response" cycles. It employs a **Reasoning + Action (ReAct)** loop that ensures every action is preceded by deliberate thought.
 
-- `mock`
-- `openai-compatible`
-- `anthropic`
-- `gemini`
-- `ollama`
-- `openrouter`
-
-Provider failover can be configured with `fallbackShards`.
-
-## Runes
-
-Runes are tools with schemas and risks. A Rune cannot execute without passing the policy layer.
-
-Built-in Rune families include:
-
-- workspace file reads/search/edit/patch/shell
-- Git status/diff/summary
-- semantic memory remember/search
-- plugin-provided Runes
-
-## Chronicle and Sage
-
-Chronicle stores session history and memory.
-
-Sage traces serialize the messages and Flow events for replayable, redacted audit records.
-
-## Plugins
-
-Plugins live under `.rimuru/plugins/<name>` and declare their Runes in `rimuru.plugin.json`. Rimuru validates exported Runes against the manifest before registration.
-
-## Testing Philosophy
-
-Rimuru uses a deterministic mock Shard so tests do not need network calls. This keeps orchestration, tools, memory, TUI, Gate, and safety behavior stable in CI.
+### The Thought-Plan-Act Cycle
+When Rimuru receives an objective, it executes the following loop:
+1. **Synthesis**: It builds a prompt containing the current `SOUL.md`, the `Rune Registry`, and the `Chronicle` history.
+2. **Reasoning**: The model outputs a **Thought** block: *"I see the user wants to refactor the auth system. I first need to locate the auth handler."*
+3. **Tool Selection**: It outputs an **Action**: `workspace.findFiles`.
+4. **Vow Check**: The Kernel verifies: *"Does this vessel have 'read' permissions for the workspace?"*
+5. **Execution**: The Rune is invoked, and the result is returned as an **Observation**.
+6. **Reflection**: The AI reflects on the result: *"I found the file at src/auth.ts. Now I will read its content."*
