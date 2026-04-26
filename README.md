@@ -27,19 +27,44 @@ This repository is structured as a high-performance monorepo:
 ### Sovereign Portal (Web UI)
 A high-performance, minimalist dashboard designed for "Zen" focus:
 - **Real-time Streaming**: Token-by-token response rendering via Server-Sent Events (SSE).
-- **Zen UI System**: A distraction-free visual language available in Dark, Light, and High-Contrast modes.
+- **Zen UI System**: A distraction-free visual language available in Dark and Light modes.
 - **Glide-Scroll Engine**: Optimized viewport management for smooth, lag-free conversations.
-- **Professional Typography**: Deep integration with the Inter and Outfit typefaces for maximum legibility.
+- **Professional Typography**: Deep integration with the Inter typeface for maximum legibility.
 
 ### Security & Auditability
 - **Permission Gating**: Every Rune (tool) is classified by risk (read, write, execute, network) and requires explicit policy approval.
 - **Redacted Traces**: Full execution logs are persisted in an auditable, replayable format.
 - **Local-First**: All memory, secret storage (Vault), and tool execution occur on your local machine.
 
-### Extensibility
-- **Rune Registry**: Easily add new capabilities by defining typed tool contracts.
-- **Plugin System**: Load external logic through signed manifest-based plugins.
-- **MCP Compatibility**: Native support for Model Context Protocol (MCP) tool-calling.
+## CLI Command Reference
+
+The `rimuru` CLI is the primary entry point for managing the local runtime.
+
+### Core Commands
+
+- **`init` / `setup`**: Initialize a new Rimuru workspace.
+  - `--wizard`: Start an interactive configuration walkthrough.
+  - `--force`: Overwrite existing configuration.
+  - `--provider <name>`: Set the initial AI provider (e.g., `openai-compatible`, `anthropic`).
+  - `--model <name>`: Set the default model.
+- **`chat [prompt]`**: Start a conversation.
+  - If no prompt is provided, launches the **Interactive TUI**.
+  - If a prompt is provided, returns a single response to stdout.
+- **`agent <objective>`**: Run a goal-oriented agent loop with model-guided planning.
+- **`memory`**: Manage conversation chronicles and semantic memory.
+  - `list`: List all available sessions.
+  - `summary <session>`: Generate a summary of a specific session.
+  - `search <query>`: Perform a semantic search across indexed memories.
+- **`gate`**: Control the background gateway server.
+  - `start [--port <port>] [--approvals]`: Launch the Gate server for Web UI connectivity.
+  - `status`: Check the current state of the Gate and active vessel.
+  - `install-service`: Generate a systemd user service for background operation.
+- **`config`**: Manage runtime settings.
+  - `list`: Show current configuration as JSON.
+  - `set <key> <value>`: Update a configuration value.
+- **`rune <name> <input>`**: Execute a specific tool (rune) directly from the terminal.
+- **`doctor [--json]`**: Perform a system diagnostic check on the environment and configuration.
+- **`ui` / `dashboard`**: Launch the terminal-based monitoring dashboard.
 
 ## Getting Started
 
@@ -49,37 +74,15 @@ pnpm install
 pnpm build
 ```
 
-## CLI Command Reference
-
-The `rimuru` CLI is the primary entry point for managing the local runtime:
-
-- `init`: Initialize a new Rimuru workspace and configuration.
-- `chat <prompt>`: Start a quick chat turn with the active Sovereign kernel.
-- `agent <objective>`: Run a goal-oriented agent loop with model-guided planning.
-- `memory [list|summary|search]`: Manage conversation chronicles and semantic memory.
-- `gate [start|stop|status]`: Control the background Gate HTTP/SSE server.
-- `rune <name> <input>`: Execute a specific tool (rune) directly from the terminal.
-- `trace [list|inspect]`: Audit previous execution flows and model interactions.
-- `plugin [list|inspect]`: Manage external runtime extensions.
-- `doctor`: Perform a system check on configuration, providers, and environment.
-- `ui`: Launch the local terminal user interface (TUI).
-
-## Development
+### Development
 Start the local Gate server:
 ```bash
 pnpm --filter @rimuru/cli dev gate start --port 19710
 ```
 
-
 Launch the Sovereign Portal:
 ```bash
 pnpm --filter @rimuru/web dev
-```
-
-### Production Deployment
-The Gate server can be installed as a systemd user service for persistent background operation:
-```bash
-rimuru gate install-service
 ```
 
 ## Documentation
