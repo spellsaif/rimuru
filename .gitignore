@@ -16,6 +16,9 @@ next-env.d.ts
 # Rimuru Runtime
 .rimuru/
 rimuru.config.json
+.wwebjs_cache/
+.wwebjs_auth/
+auth_info/
 
 # IDEs
 .vscode/
