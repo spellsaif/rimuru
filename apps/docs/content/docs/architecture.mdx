@@ -1,0 +1,68 @@
+---
+title: Architecture
+description: How Rimuru's Gate, Sovereign, Shards, Runes, Chronicles, Flow, and Circles fit together.
+---
+
+# Architecture
+
+Rimuru is designed as a small core with explicit seams.
+
+```text
+Circle / CLI / TUI / Room
+        ↓
+      Gate
+        ↓
+    Sovereign
+   ↙    ↓     ↘
+Shard  Rune  Chronicle
+        ↓
+      Flow → Sage Trace
+```
+
+## Gate
+
+Gate is the local control plane. It exposes HTTP and server-sent-events endpoints for chat, agents, sessions, Runes, traces, Circles, Vault, Rituals, and Canvas.
+
+Gate writes `.rimuru/gate-state.json` while running so operators can inspect runtime status.
+
+## Sovereign
+
+Sovereign is the orchestration kernel. It loads Chronicle history, builds the message list, calls a Shard, appends messages back to memory, and emits Flow events.
+
+## Shards
+
+Shards isolate provider behavior. Rimuru supports:
+
+- `mock`
+- `openai-compatible`
+- `anthropic`
+- `gemini`
+- `ollama`
+- `openrouter`
+
+Provider failover can be configured with `fallbackShards`.
+
+## Runes
+
+Runes are tools with schemas and risks. A Rune cannot execute without passing the policy layer.
+
+Built-in Rune families include:
+
+- workspace file reads/search/edit/patch/shell
+- Git status/diff/summary
+- semantic memory remember/search
+- plugin-provided Runes
+
+## Chronicle and Sage
+
+Chronicle stores session history and memory.
+
+Sage traces serialize the messages and Flow events for replayable, redacted audit records.
+
+## Plugins
+
+Plugins live under `.rimuru/plugins/<name>` and declare their Runes in `rimuru.plugin.json`. Rimuru validates exported Runes against the manifest before registration.
+
+## Testing Philosophy
+
+Rimuru uses a deterministic mock Shard so tests do not need network calls. This keeps orchestration, tools, memory, TUI, Gate, and safety behavior stable in CI.

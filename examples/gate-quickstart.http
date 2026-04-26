@@ -1,0 +1,47 @@
+### Start Gate first
+### rimuru gate start --approvals --port 19710
+
+GET http://127.0.0.1:19710/gate/overview
+
+### Create a Soul
+POST http://127.0.0.1:19710/sessions
+Content-Type: application/json
+
+{
+  "sessionId": "demo"
+}
+
+### Send a message
+POST http://127.0.0.1:19710/sessions/demo/message
+Content-Type: application/json
+
+{
+  "prompt": "Explain this workspace in three bullets."
+}
+
+### Stream a message with Server-Sent Events
+POST http://127.0.0.1:19710/sessions/demo/stream
+Content-Type: application/json
+
+{
+  "prompt": "Stream a short status report."
+}
+
+### Call a Rune; write/execute/network risks may queue a Pact
+POST http://127.0.0.1:19710/runes/call
+Content-Type: application/json
+
+{
+  "name": "workspace.search",
+  "sessionId": "demo",
+  "input": {
+    "pattern": "Rimuru",
+    "include": "*.md"
+  }
+}
+
+### Review pending Pacts
+GET http://127.0.0.1:19710/approvals
+
+### Inspect audit events
+GET http://127.0.0.1:19710/audit?limit=25

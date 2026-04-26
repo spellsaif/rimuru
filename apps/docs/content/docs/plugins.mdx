@@ -1,0 +1,114 @@
+---
+title: Plugins and Skills
+description: Extend Rimuru with manifest-validated plugin folders and custom Runes.
+---
+
+# Plugins and Skills
+
+Plugins are local Skill folders that register Runes.
+
+## Folder Layout
+
+```text
+.rimuru/plugins/tempest/
+  rimuru.plugin.json
+  plugin.mjs
+```
+
+## Manifest
+
+```json
+{
+  "name": "tempest",
+  "version": "1.0.0",
+  "entry": "plugin.mjs",
+  "runes": [
+    {
+      "name": "tempest.echo",
+      "risk": "read",
+      "description": "Echo input"
+    }
+  ]
+}
+```
+
+## Entry Module
+
+```js
+export function createRunes() {
+  return [
+    {
+      name: "tempest.echo",
+      description: "Echo input",
+      risk: "read",
+      async invoke(input) {
+        return { input };
+      }
+    }
+  ];
+}
+```
+
+## Commands
+
+```sh
+rimuru plugin list
+rimuru plugin inspect tempest
+rimuru rune tempest.echo '{"hello":"rimuru"}'
+```
+
+Aliases:
+
+```sh
+rimuru skill list
+```
+
+## Validation
+
+Rimuru validates every exported Rune against the manifest. A plugin cannot silently add undeclared Runes.
+
+Plugin Rune names must be namespaced under the plugin name, such as `tempest.echo`. This prevents a plugin from impersonating core Runes like `workspace.shell`.
+
+This keeps extension power visible and reviewable.
+
+## Permissions and Audit
+
+Every Rune declares a risk:
+
+- `read`
+- `write`
+- `execute`
+- `network`
+
+The active Vows decide which risks run automatically. When Gate is started with approvals, blocked risks queue a Pact:
+
+```sh
+RIMURU_APPROVALS=1 rimuru gate start --approvals
+```
+
+Review Pacts in Room or through HTTP:
+
+```sh
+curl http://127.0.0.1:19710/approvals
+curl -X POST http://127.0.0.1:19710/approvals/<id>/approve \
+  -H 'Content-Type: application/json' \
+  -d '{"scope":"once"}'
+```
+
+Gate, MCP, agent, and CLI Rune calls write redacted audit events to `.rimuru/audit.jsonl` when audit mode is enabled by the runtime path.
+
+```sh
+curl http://127.0.0.1:19710/audit?limit=25
+```
+
+Use this log to review which plugin or core Runes were requested, allowed, denied, completed, or failed.
+
+## Registry
+
+Rimuru currently exposes local registry metadata:
+
+```sh
+rimuru registry list
+```
+
+Future work can add signed remote registries and trust policies.

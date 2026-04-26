@@ -1,0 +1,101 @@
+---
+title: Gate API
+description: The Rimuru Gate daemon, lifecycle commands, HTTP endpoints, and streaming API.
+---
+
+# Gate API
+
+Gate is Rimuru's local gateway daemon and control plane.
+
+## Lifecycle
+
+```sh
+rimuru gate status
+rimuru gate status --json
+rimuru gate start --port 19710 --approvals
+rimuru gate stop
+rimuru gate install-service
+```
+
+The status command reports:
+
+- workspace
+- active Soul
+- active Shard/model
+- Vows
+- Barrier
+- runtime state: `running`, `stale`, or `stopped`
+- URL and PID when running
+
+## Core Endpoints
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /health` | Health check |
+| `GET /room` | Web dashboard |
+| `GET /gate/status` | Runtime status |
+| `GET /gate/overview` | Combined Room/control-center state |
+| `GET /policy` | Active Vows, Barrier, and approval mode |
+| `GET /providers` | Current Shard and fallback Shards |
+| `POST /chat` | Chat turn |
+| `POST /chat/stream` | Streaming chat turn over SSE |
+| `POST /agent` | Planner + Rune observations + final answer |
+| `GET /runes` | List Runes |
+| `POST /runes/call` | Invoke a Rune |
+| `GET /sessions` | List Souls |
+| `POST /sessions` | Create a Soul |
+| `GET /sessions/:id/history` | Read Soul history |
+| `GET /sessions/:id/summary` | Summarize Soul history |
+| `POST /sessions/:id/message` | Send to a Soul |
+| `POST /sessions/:id/stream` | Stream a Soul message over SSE |
+| `GET /events` | Flow snapshot |
+| `GET /events/stream` | Flow SSE stream |
+| `GET /traces` | List Sage traces |
+| `GET /sessions/:id/traces` | List Sage traces for a Soul |
+| `GET /audit` | List Rune audit events |
+| `GET /approvals` | List pending Pacts |
+| `POST /approvals/:id/approve` | Approve a pending Pact |
+| `POST /approvals/:id/deny` | Deny a pending Pact |
+
+## Platform Endpoints
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /vessels` | List Vessel profiles |
+| `GET /circles` | List Circle channels |
+| `POST /circles/:name/message` | Generic/local Circle ingress |
+| `POST /circles/:name/telegram` | Telegram webhook ingress |
+| `POST /circles/:name/slack` | Slack Events ingress |
+| `POST /circles/:name/discord` | Discord-compatible ingress |
+| `GET /pairings` | List pairing state |
+| `POST /pairings/approve` | Approve pairing code |
+| `GET /vault` | List secret names |
+| `POST /vault` | Store a secret |
+| `GET /rituals` | List scheduled Rituals |
+| `POST /rituals` | Create a Ritual |
+| `GET /canvas` | List Canvas artifacts |
+| `POST /canvas` | Create a Canvas artifact |
+| `GET /memory/search?query=...` | Search semantic memory |
+| `POST /memory/remember` | Store a memory note |
+| `POST /memory/index` | Index a Soul into semantic memory |
+
+## Streaming Chat
+
+```sh
+curl -N \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"explain this workspace"}' \
+  http://127.0.0.1:19710/chat/stream
+```
+
+## Room Dashboard
+
+After Gate starts, open:
+
+```text
+http://127.0.0.1:19710/room
+```
+
+Room is intentionally lightweight. It uses the same Gate endpoints that external clients can use.
+
+Room now acts as the default local control center. It can create Souls, stream chat, call Runes, approve or deny Pacts, search memory, and inspect traces/audit events without any separate frontend service.

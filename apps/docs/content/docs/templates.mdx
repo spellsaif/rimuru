@@ -1,0 +1,74 @@
+---
+title: Examples and Templates
+description: Starter configs, Gate requests, and plugin templates for day-to-day Rimuru usage.
+---
+
+# Examples and Templates
+
+The `examples/` folder gives you copyable starting points for local development, Gate automation, and plugin authoring.
+
+## Local Workspace Config
+
+Use `examples/local-workspace/rimuru.config.json` as a conservative baseline:
+
+```json
+{
+  "vessel": "operator",
+  "vessels": {
+    "operator": {
+      "shard": "mock",
+      "model": "mock",
+      "soul": "operator",
+      "vows": ["read"],
+      "barrier": "readonly"
+    }
+  },
+  "gatewayPort": 19710
+}
+```
+
+Start with `read` Vows. Add `write`, `execute`, or `network` only for trusted Vessels and run Gate with approvals enabled.
+
+## Gate Request File
+
+`examples/gate-quickstart.http` contains request examples for:
+
+- `GET /gate/overview`
+- `POST /sessions`
+- `POST /sessions/:id/message`
+- `POST /sessions/:id/stream`
+- `POST /runes/call`
+- `GET /approvals`
+- `GET /audit`
+
+Run Gate first:
+
+```sh
+rimuru gate start --approvals --port 19710
+```
+
+Then use your editor's HTTP client or translate the requests to `curl`.
+
+## Plugin Template
+
+Install the Tempest plugin example into a workspace:
+
+```sh
+mkdir -p .rimuru/plugins/tempest
+cp examples/plugin-tempest/rimuru.plugin.json .rimuru/plugins/tempest/
+cp examples/plugin-tempest/plugin.mjs .rimuru/plugins/tempest/
+rimuru plugin inspect tempest
+rimuru rune tempest.echo '{"hello":"rimuru"}'
+```
+
+The write-risk example Rune, `tempest.note`, is intentionally reviewable. With approvals enabled, it queues a Pact before running.
+
+## Daily Operator Flow
+
+```sh
+rimuru doctor
+RIMURU_TRACE=1 RIMURU_APPROVALS=1 rimuru gate start --approvals
+open http://127.0.0.1:19710/room
+```
+
+Use Room to create Souls, stream chat, inspect Runes, approve Pacts, search memory, and view audit events.

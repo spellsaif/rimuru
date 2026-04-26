@@ -1,0 +1,52 @@
+---
+title: Concepts
+description: Rimuru's product language and how it maps to practical assistant-platform concepts.
+---
+
+# Concepts
+
+Rimuru uses a small themed vocabulary, but each term maps to a concrete system concept.
+
+| Rimuru Term | Plain Meaning | Purpose |
+| --- | --- | --- |
+| Gate | Gateway daemon | Local HTTP/SSE control plane |
+| Sovereign | Runtime core | Orchestrates model calls, memory, tools, and events |
+| Vessel | Agent profile | Shard, model, Soul, Vows, Barrier, and optional workspace |
+| Soul | Session | Persistent conversation state |
+| Shard | Provider | Model adapter such as OpenAI-compatible, Anthropic, Gemini, Ollama, OpenRouter |
+| Rune | Tool | Typed capability with schema and risk class |
+| Chronicle | Memory | JSON session history and semantic memory |
+| Sage | Trace | Audit record of messages and Flow events |
+| Flow | Event stream | Immutable runtime events for UI, traces, and streaming |
+| Circle | Channel | Local/webhook/Telegram/Slack/Discord ingress |
+| Vow | Permission policy | Allowed risk classes: read, write, execute, network |
+| Pact | Approval | Interactive approval for risky actions |
+| Barrier | Sandbox | Isolation mode: none, readonly, docker |
+| Vault | Secret store | Encrypted local storage for credentials |
+| Ritual | Schedule | Recurring prompts while Gate is running |
+| Canvas | Artifacts | Markdown, HTML, text, and JSON outputs |
+
+## Why Keep These Names?
+
+Names are useful when they describe boundaries.
+
+`Rune` is not just a function. It is a typed, permissioned tool. `Shard` is not just a string provider name. It is the boundary where model-specific behavior lives. `Sage` is not just logging. It is the audit trail.
+
+The terms help keep the system composable.
+
+## CLI Aliases
+
+Some commands also support plain aliases:
+
+```sh
+rimuru rune list
+rimuru tool list
+
+rimuru session list
+rimuru soul list
+
+rimuru channel list
+rimuru circle list
+```
+
+The docs prefer Rimuru vocabulary when it clarifies architecture and plain language when it improves onboarding.

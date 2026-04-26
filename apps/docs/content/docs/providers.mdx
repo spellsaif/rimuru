@@ -1,0 +1,92 @@
+---
+title: Providers
+description: Configure Shards for OpenAI-compatible endpoints, Anthropic, Gemini, Ollama, OpenRouter, and failover.
+---
+
+# Providers
+
+Providers are called **Shards** in Rimuru.
+
+Supported values:
+
+- `mock`
+- `openai-compatible`
+- `anthropic`
+- `gemini`
+- `ollama`
+- `openrouter`
+
+## Environment Variables
+
+```sh
+RIMURU_PROVIDER=openai-compatible \
+RIMURU_BASE_URL=https://api.openai.com/v1 \
+RIMURU_API_KEY=... \
+RIMURU_MODEL=gpt-4.1-mini \
+rimuru chat "explain this workspace"
+```
+
+Rimuru also accepts themed aliases:
+
+```sh
+RIMURU_SHARD=openrouter RIMURU_MODEL=openai/gpt-4o-mini rimuru chat "hello"
+```
+
+## Config File
+
+```json
+{
+  "vessel": "main",
+  "vessels": {
+    "main": {
+      "shard": "openai-compatible",
+      "baseUrl": "https://api.openai.com/v1",
+      "model": "gpt-4.1-mini",
+      "soul": "default",
+      "vows": ["read"],
+      "barrier": "none"
+    }
+  }
+}
+```
+
+Keep secrets in environment variables or Vault instead of committing config files with API keys.
+
+## Ollama
+
+Ollama is useful for local-first setups.
+
+```json
+{
+  "shard": "ollama",
+  "model": "llama3.1"
+}
+```
+
+## Failover
+
+Use `fallbackShards` to define provider attempts after the primary Shard fails.
+
+```json
+{
+  "shard": "openai-compatible",
+  "model": "gpt-4.1-mini",
+  "fallbackShards": [
+    { "provider": "openrouter", "model": "openai/gpt-4o-mini" },
+    { "provider": "mock", "model": "mock" }
+  ]
+}
+```
+
+## Check Current Provider
+
+```sh
+rimuru provider current
+rimuru provider list
+```
+
+Aliases:
+
+```sh
+rimuru shard current
+```

@@ -1,0 +1,11 @@
+{
+  "events": [
+    "run.started",
+    "memory.loaded",
+    "provider.requested",
+    "provider.responded",
+    "memory.saved",
+    "run.completed"
+  ],
+  "responsePrefix": "Rimuru heard: golden trace"
+}

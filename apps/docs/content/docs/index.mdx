@@ -1,0 +1,72 @@
+---
+title: Introduction
+description: What Rimuru is, why it exists, and how the platform fits together.
+---
+
+# Rimuru
+
+Rimuru is a safe, auditable, local-first AI assistant platform.
+
+It exists for people who want an assistant that can grow into a personal AI gateway without becoming hidden magic. Rimuru gives you a clean runtime, typed tools, persistent memory, channel ingress, traces, plugins, scheduled tasks, artifacts, and a web dashboard.
+
+## The Short Version
+
+Rimuru is built around a few clear ideas:
+
+- **Gate** is the local HTTP and server-sent-events control plane.
+- **Sovereign** is the runtime core that coordinates model calls, tools, memory, and events.
+- **Runes** are typed tools with explicit risk classes.
+- **Chronicle** is session and semantic memory.
+- **Sage** is the trace/audit layer.
+- **Circles** connect Rimuru to local webhooks, Telegram, Slack, Discord-style bridges, and future channels.
+- **Vows** and **Pacts** keep powerful actions explicit.
+
+## Why It Exists
+
+Modern personal assistant systems are powerful, but they often become difficult to trust:
+
+- Tool calls are hard to audit.
+- Permission boundaries are unclear.
+- Memory is hidden.
+- Provider logic leaks into orchestration.
+- Channel integrations grow into a tangled platform.
+
+Rimuru takes the opposite path. The runtime is small, the extension points are typed, the defaults are conservative, and the product language maps directly to the architecture.
+
+## What You Can Use It For
+
+- Run a local assistant over CLI, TUI, Gate API, or Room dashboard.
+- Ask coding questions about a repository.
+- Search files and inspect Git state through Runes.
+- Apply safe patches with rollback records.
+- Queue HTTP Pacts for risky Rune calls and review audit events.
+- Keep session history and semantic memory locally.
+- Expose the assistant through Circle webhooks.
+- Pair/approve inbound senders before processing untrusted messages.
+- Store secrets in the local Vault.
+- Schedule recurring prompts with Rituals.
+- Save generated markdown, HTML, text, or JSON artifacts in Canvas.
+
+## Design Promise
+
+Rimuru optimizes for trust over spectacle.
+
+The platform should be understandable by reading the code. Every provider, tool, memory backend, channel adapter, and plugin should have a clear boundary.
+
+## Next Step
+
+Start with the installation guide.
+
+```sh
+npm install -g rimuru
+rimuru setup --wizard
+rimuru gate start --approvals
+```
+
+Then open the Room dashboard:
+
+```text
+http://127.0.0.1:19710/room
+```
+
+For copyable starter files, see the examples and templates guide.

@@ -1,0 +1,127 @@
+---
+title: Safety
+description: Rimuru's permission model, Vows, Pacts, Barriers, rollback, pairing, and Vault.
+---
+
+# Safety
+
+Rimuru treats assistant power as a permissioned system.
+
+The default Vow is read-only.
+
+## Rune Risks
+
+Every Rune declares one risk class:
+
+| Risk | Meaning |
+| --- | --- |
+| `read` | File reads, searches, Git status, memory lookup |
+| `write` | File edits, patches, memory writes, artifact writes |
+| `execute` | Shell commands and test runners |
+| `network` | External network calls |
+
+Runes are denied unless their risk is allowed by the active policy.
+
+## Vows
+
+Vows are configured allowed risks.
+
+```sh
+RIMURU_ALLOW_RISKS=read,write rimuru agent "prepare a safe patch"
+```
+
+Or in `rimuru.config.json`:
+
+```json
+{
+  "vows": ["read", "write"]
+}
+```
+
+## Pacts
+
+Pacts are interactive approvals.
+
+```sh
+RIMURU_APPROVALS=1 rimuru agent "run the tests"
+RIMURU_APPROVALS=1 rimuru gate start --approvals
+```
+
+When a denied risk is requested, Rimuru prompts for approval instead of silently executing.
+
+Gate exposes pending Pacts through Room and HTTP:
+
+```sh
+curl http://127.0.0.1:19710/approvals
+```
+
+Approve for one call or for the session:
+
+```sh
+curl -X POST http://127.0.0.1:19710/approvals/<id>/approve \
+  -H 'Content-Type: application/json' \
+  -d '{"scope":"session"}'
+```
+
+## Audit Log
+
+Audited Rune paths write redacted JSONL records to `.rimuru/audit.jsonl`.
+
+```sh
+curl http://127.0.0.1:19710/audit?limit=25
+```
+
+Audit events show requested, allowed, denied, completed, and failed Rune calls with session, risk, decision reason, and redacted input/output previews.
+
+## Barriers
+
+Barrier modes control command execution:
+
+| Barrier | Behavior |
+| --- | --- |
+| `none` | Execute directly in the workspace |
+| `readonly` | Deny command execution |
+| `docker` | Run commands in a read-only, network-disabled container |
+
+```sh
+RIMURU_ALLOW_RISKS=read,execute RIMURU_SANDBOX=readonly rimuru rune workspace.shell '{"command":"node","args":["--version"]}'
+```
+
+## Rollback
+
+Patch edits create rollback records under `.rimuru/rollbacks`.
+
+```sh
+rimuru rollback list
+rimuru rollback inspect <id>
+rimuru rollback apply <id>
+```
+
+## Pairing
+
+Unknown non-local Circle senders are paired by default.
+
+```sh
+rimuru pairing list
+rimuru pairing approve <code>
+```
+
+## Vault
+
+Vault stores secrets encrypted locally.
+
+```sh
+rimuru vault set TELEGRAM_BOT_TOKEN <token>
+rimuru vault list
+rimuru vault get TELEGRAM_BOT_TOKEN
+```
+
+Use `RIMURU_VAULT_KEY` to control the encryption key source.
+
+## Doctor Diagnostics
+
+```sh
+rimuru doctor --json
+```
+
+Doctor warns about missing provider keys, powerful Vows without a Barrier, Circle token issues, and pairing requirements.

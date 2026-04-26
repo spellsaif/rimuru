@@ -1,0 +1,113 @@
+---
+title: Circles
+description: Configure local, webhook, Telegram, Slack, and Discord-compatible Circle channel ingress.
+---
+
+# Circles
+
+Circles connect Rimuru to external channels.
+
+Current Circle support includes:
+
+- local messages
+- generic webhooks
+- Telegram webhook normalization
+- Slack Events API normalization
+- Discord-compatible event normalization
+
+## List Circles
+
+```sh
+rimuru channel list
+rimuru circle list
+```
+
+## Local Circle
+
+```sh
+rimuru channel send local "hello from the CLI"
+```
+
+Gate endpoint:
+
+```text
+POST /circles/local/message
+```
+
+## Generic Webhook
+
+```sh
+rimuru channel add webhook buildbot --allow alice,bob
+```
+
+Gate endpoint:
+
+```text
+POST /circles/buildbot/message
+```
+
+Payload:
+
+```json
+{
+  "from": "alice",
+  "message": "summarize the build failure"
+}
+```
+
+## Telegram
+
+```sh
+rimuru channel add telegram telegram --token-env TELEGRAM_BOT_TOKEN
+```
+
+Configure Telegram to POST updates to:
+
+```text
+https://<your-host>/circles/telegram/telegram
+```
+
+If `TELEGRAM_BOT_TOKEN` is set, Rimuru can send the response back through Telegram's `sendMessage` API.
+
+## Slack
+
+```sh
+rimuru channel add slack slack --token-env SLACK_BOT_TOKEN
+```
+
+Configure Slack Events API to POST to:
+
+```text
+https://<your-host>/circles/slack/slack
+```
+
+Slack URL verification challenges are handled by the Gate endpoint.
+
+## Discord-Compatible Bridges
+
+```sh
+rimuru channel add discord discord
+```
+
+Configure your Discord bridge or bot to POST message payloads to:
+
+```text
+https://<your-host>/circles/discord/discord
+```
+
+Discord ping-style payloads are answered with `{ "type": 1 }`.
+
+## Pairing and Allowlist
+
+For non-local Circles, unknown senders require pairing unless `allowFrom` includes the sender or `*`.
+
+```sh
+rimuru pairing list
+rimuru pairing approve <code>
+```
+
+## Security Advice
+
+Treat every inbound channel message as untrusted input.
+
+Keep write/execute Vows off for channel-facing Vessels unless there is a strong reason and a Barrier is configured.

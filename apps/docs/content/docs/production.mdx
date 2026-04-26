@@ -1,0 +1,177 @@
+---
+title: Production Runbook
+description: Deploy Rimuru Gate, configure Circles, manage security, and prepare releases.
+---
+
+# Production Runbook
+
+This page collects the operational path for running Rimuru as a local-first assistant service.
+
+## Install
+
+```sh
+npm install -g rimuru
+rimuru setup --wizard
+rimuru doctor
+rimuru gate start
+```
+
+## Gate Lifecycle
+
+```sh
+rimuru gate status --json
+RIMURU_TRACE=1 RIMURU_APPROVALS=1 rimuru gate start --port 19710 --approvals
+rimuru gate stop
+rimuru gate install-service
+```
+
+The Gate writes `.rimuru/gate-state.json` while running so status commands and operators can identify the active process.
+
+Open Room after Gate starts:
+
+```text
+http://127.0.0.1:19710/room
+```
+
+Room is the production operator console for sessions, streaming chat, providers, Runes, approvals, memory, traces, audit events, Circles, Vault, Rituals, and Canvas.
+
+## Systemd User Service
+
+```sh
+rimuru gate install-service
+systemctl --user enable --now rimuru.service
+systemctl --user status rimuru.service
+```
+
+## Circles
+
+Local Circle:
+
+```sh
+rimuru channel send local "hello"
+```
+
+Telegram webhook Circle:
+
+```sh
+rimuru channel add telegram telegram --token-env TELEGRAM_BOT_TOKEN
+```
+
+Configure Telegram to POST updates to:
+
+```text
+https://<your-host>/circles/telegram/telegram
+```
+
+Slack event Circle:
+
+```sh
+rimuru channel add slack slack --token-env SLACK_BOT_TOKEN
+```
+
+Configure Slack Events API to POST to:
+
+```text
+https://<your-host>/circles/slack/slack
+```
+
+Discord-compatible Circle:
+
+```sh
+rimuru channel add discord discord
+```
+
+Configure your bridge or bot to POST payloads to:
+
+```text
+https://<your-host>/circles/discord/discord
+```
+
+## Pairing
+
+Unknown non-local Circle senders are paired by default.
+
+```sh
+rimuru pairing list
+rimuru pairing approve <code>
+```
+
+## Pacts and Audit
+
+Run write, execute, and network workflows with explicit approval:
+
+```sh
+RIMURU_APPROVALS=1 rimuru gate start --approvals
+```
+
+Pending approvals are available in Room and through Gate:
+
+```sh
+curl http://127.0.0.1:19710/approvals
+curl -X POST http://127.0.0.1:19710/approvals/<id>/approve \
+  -H 'Content-Type: application/json' \
+  -d '{"scope":"once"}'
+```
+
+Rune calls are written to `.rimuru/audit.jsonl` on audited paths. Inspect recent events:
+
+```sh
+curl http://127.0.0.1:19710/audit?limit=50
+```
+
+Audit events are redacted before storage and include the Rune, risk, session, decision, and outcome.
+
+## Secrets
+
+Keep secrets in Vault or environment variables:
+
+```sh
+rimuru vault set TELEGRAM_BOT_TOKEN <token>
+rimuru vault list
+```
+
+Set `RIMURU_VAULT_KEY` in production to control the encryption key.
+
+For systemd user services, put provider and Circle tokens in your user environment or an environment file loaded by the user manager. Do not commit tokens to `rimuru.config.json`.
+
+## Safe Vessels for Channels
+
+For channel-facing Vessels, prefer read-only defaults:
+
+```json
+{
+  "vessels": {
+    "public": {
+      "shard": "openai-compatible",
+      "model": "gpt-4.1-mini",
+      "soul": "public",
+      "vows": ["read"],
+      "barrier": "readonly"
+    }
+  }
+}
+```
+
+Only add `write` or `execute` when you have a controlled sender allowlist and clear rollback/audit expectations.
+
+## Release
+
+Before publishing:
+
+```sh
+npm run release:check
+```
+
+The release check runs typecheck, tests, build, and `npm pack --dry-run`.
+
+## Production Checklist
+
+- Run `rimuru doctor --json` and resolve warnings.
+- Keep provider/channel secrets out of committed config.
+- Use pairing or explicit `allowFrom` for non-local Circles.
+- Keep channel-facing Vows conservative.
+- Enable traces for important deployments.
+- Start Gate with `--approvals` when Vows include `write`, `execute`, or `network`.
+- Review `.rimuru/audit.jsonl` during incident response.
+- Verify rollback records after write-enabled workflows.
+- Use a service manager for Gate.

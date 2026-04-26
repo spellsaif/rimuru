@@ -1,0 +1,86 @@
+---
+title: Memory and Artifacts
+description: How Chronicle, semantic memory, Sage traces, and Canvas artifacts work in Rimuru.
+---
+
+# Memory and Artifacts
+
+Rimuru keeps memory local and inspectable.
+
+## Chronicle
+
+Chronicle is JSON-backed session history.
+
+```sh
+rimuru memory list
+rimuru memory summary default
+rimuru session history default
+```
+
+Compact a long session:
+
+```sh
+rimuru memory compact default
+```
+
+## Semantic Memory
+
+Rimuru includes deterministic local embeddings for stable tests and offline use.
+
+Index a session:
+
+```sh
+rimuru memory semantic default
+```
+
+Remember a note:
+
+```sh
+rimuru memory remember "Rimuru uses Gate, Runes, Chronicle, Sage, and Circles."
+```
+
+Search memory:
+
+```sh
+rimuru memory search "provider adapters and runes"
+```
+
+Agents can use memory through Runes:
+
+```sh
+rimuru rune memory.search '{"query":"provider adapters"}'
+```
+
+## Sage Traces
+
+Enable trace persistence:
+
+```sh
+RIMURU_TRACE=1 rimuru chat "inspect this workspace"
+```
+
+Inspect traces:
+
+```sh
+rimuru trace list
+rimuru trace inspect <file>
+```
+
+Sage traces redact obvious secrets before writing JSON records.
+
+## Canvas
+
+Canvas stores generated artifacts.
+
+```sh
+rimuru canvas create plan "# Plan\nShip Gate, docs, and channel setup."
+rimuru canvas list
+rimuru canvas show <id>
+```
+
+Supported artifact kinds:
+
+- `markdown`
+- `html`
+- `text`
+- `json`

@@ -1,0 +1,114 @@
+---
+title: Getting Started
+description: Install Rimuru, initialize a workspace, run the Gate, and send your first message.
+---
+
+# Getting Started
+
+Rimuru requires Node.js 22 or newer.
+
+## Install
+
+```sh
+npm install -g rimuru
+```
+
+When developing from this repository:
+
+```sh
+npm install
+npm run check
+npm run dev -- setup --force
+```
+
+## Setup
+
+The easiest setup path is the wizard:
+
+```sh
+rimuru setup --wizard
+```
+
+For a non-interactive local mock setup:
+
+```sh
+rimuru setup --force --provider mock --vessel main --soul default --vows read
+```
+
+This creates:
+
+- `rimuru.config.json`
+- `.rimuru/sessions`
+- `.rimuru/traces`
+- `.rimuru/plugins`
+- `.rimuru/rollbacks`
+- `.rimuru/canvas`
+- `.rimuru/rituals`
+
+## Doctor
+
+Use `doctor` to inspect environment and configuration issues:
+
+```sh
+rimuru doctor
+rimuru doctor --json
+```
+
+Doctor reports missing API keys, risky permissions without a Barrier, Circle pairing requirements, missing token environment variables, and missing local state directories.
+
+## Start Gate
+
+Gate is the local control plane.
+
+```sh
+rimuru gate start --port 19710
+```
+
+Check status:
+
+```sh
+rimuru gate status --json
+```
+
+Stop the tracked Gate process:
+
+```sh
+rimuru gate stop
+```
+
+Install a systemd user service:
+
+```sh
+rimuru gate install-service
+systemctl --user enable --now rimuru.service
+```
+
+## First Chat
+
+```sh
+rimuru chat "summarize this workspace"
+```
+
+Or send a message to a specific Soul/session:
+
+```sh
+rimuru session send default "what can you do?"
+```
+
+## First Agent Run
+
+```sh
+rimuru agent "check git diff and summarize risk"
+```
+
+The agent asks the model for a plan, validates Rune inputs, executes observations, and returns a final answer with evidence.
+
+## Open Room
+
+After Gate is running:
+
+```text
+http://127.0.0.1:19710/room
+```
+
+Room is a lightweight web dashboard for chat, sessions, Runes, Circles, Canvas, and runtime visibility.

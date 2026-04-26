@@ -1,0 +1,17 @@
+{
+  "title": "Rimuru",
+  "pages": [
+    "index",
+    "getting-started",
+    "concepts",
+    "architecture",
+    "gate",
+    "safety",
+    "circles",
+    "providers",
+    "memory",
+    "plugins",
+    "templates",
+    "production"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "tempest",
+  "version": "1.0.0",
+  "entry": "plugin.mjs",
+  "runes": [
+    {
+      "name": "tempest.echo",
+      "risk": "read",
+      "description": "Echoes JSON input for plugin smoke tests."
+    },
+    {
+      "name": "tempest.note",
+      "risk": "write",
+      "description": "Returns a note payload that can be reviewed before enabling writes."
+    }
+  ]
+}
