@@ -48,3 +48,85 @@ export function stripAnsi(value: string): string {
 export function getTermWidth(): number {
   return process.stdout.columns || 80;
 }
+
+export function paintMarkdown(content: string): string {
+  const lines = content.split("\n");
+  const result: string[] = [];
+  let inCodeBlock = false;
+  let i = 0;
+
+  while (i < lines.length) {
+    let line = lines[i];
+    const trimmed = line.trim();
+
+    // Code Block Toggle
+    if (trimmed.startsWith("```")) {
+      inCodeBlock = !inCodeBlock;
+      result.push(paint(line, ansi.bgCyan, ansi.black, ansi.bold));
+      i++;
+      continue;
+    }
+
+    if (inCodeBlock) {
+      result.push(paint(line, ansi.bgBlack, ansi.white));
+      i++;
+      continue;
+    }
+
+    // Table Detection
+    if (trimmed.startsWith("|")) {
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        tableLines.push(lines[i].trim());
+        i++;
+      }
+
+      // Parse Table Data
+      const tableData = tableLines
+        .filter(l => !/^\|[|\-:\s]+\|$/.test(l)) // Filter out separators
+        .map(l => l.split("|").filter((_, idx, arr) => idx > 0 && idx < arr.length - 1).map(c => c.trim()));
+
+      if (tableData.length > 0) {
+        // Calculate Max Widths
+        const colWidths = tableData[0].map((_, colIdx) => Math.max(...tableData.map(row => stripAnsi(paintMarkdown(row[colIdx] || "")).length)));
+
+        // Render Table
+        tableData.forEach((row, rowIdx) => {
+          const cells = row.map((cell, colIdx) => {
+            const styled = paintMarkdown(cell);
+            const padding = colWidths[colIdx] - stripAnsi(styled).length;
+            return " " + styled + " ".repeat(padding) + " ";
+          });
+
+          const isHeader = rowIdx === 0;
+          const rowStr = paint("│", ansi.cyan) + cells.join(paint("│", ansi.cyan)) + paint("│", ansi.cyan);
+          result.push(isHeader ? paint(rowStr, ansi.bold) : rowStr);
+
+          // Add separator after header
+          if (isHeader) {
+            const sep = paint("├", ansi.cyan) + colWidths.map(w => "─".repeat(w + 2)).join(paint("┼", ansi.cyan)) + paint("┤", ansi.cyan);
+            result.push(sep);
+          }
+        });
+        continue;
+      }
+    }
+
+    // Regular Markdown (recursion-safe for cells)
+    let text = line;
+    text = text.replace(/^# (.*$)/gm, paint("$1", ansi.cyan, ansi.bold, ansi.underline));
+    text = text.replace(/^## (.*$)/gm, paint("$1", ansi.cyan, ansi.bold));
+    text = text.replace(/\*\*\*(.*?)\*\*\*/g, paint("$1", ansi.bold, ansi.italic));
+    text = text.replace(/\*\*(.*?)\*\*/g, paint("$1", ansi.bold));
+    text = text.replace(/\*(.*?)\*/g, paint("$1", ansi.italic));
+    text = text.replace(/`(.*?)`/g, paint("$1", ansi.bgBlack, ansi.cyan));
+    if (text.trim().startsWith("- ")) text = text.replace("- ", " • ");
+
+    result.push(text);
+    i++;
+  }
+
+  return result.join("\n");
+}
+
+
