@@ -129,11 +129,14 @@ export const WHATSAPP_ADAPTER: CircleAdapter = {
             try {
                 await client.sendPresenceAvailable();
                 // Send typing state directly to the chat ID for speed
+            if (client.pupPage) {
                 await client.pupPage.evaluate(async (chatId) => {
-                    if (window.WWebJS) {
-                        await window.WWebJS.sendChatstate('composing', chatId);
+                    if ((window as any).WWebJS) {
+                        await (window as any).WWebJS.sendChatstate('composing', chatId);
                     }
                 }, msg.from);
+            }
+
                 console.log(`[whatsapp] Typing indicator active.`);
             } catch (e) {
                 console.warn("[whatsapp] Failed to send typing state:", e);

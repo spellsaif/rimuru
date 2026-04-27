@@ -1,6 +1,8 @@
 #!/usr/bin/env node
+import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join, resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import * as readline from "node:readline/promises";
 import { 
   FlowBus, 
@@ -37,7 +39,6 @@ import {
   writeSystemdUserService
 } from "@rimuru/core";
 import { 
-  getGateRuntimeStatus, 
   getGateStatus, 
   readGateState, 
   stopGate,
@@ -51,10 +52,15 @@ import {
 } from "@rimuru/vault";
 import { ansi, paint } from "./ansi.js";
 import { renderDashboard } from "./dashboard.js";
+import sirv from "sirv";
+import open from "open";
+import { createServer } from "node:http";
 
 import { promptApproval, runInteractiveTui } from "./interactive.js";
 import { setupWorkspace, setupWorkspaceInteractive } from "./setup.js";
 
+
+const h = () => dirname(fileURLToPath(import.meta.url));
 
 const [command = "dashboard", ...args] = process.argv.slice(2);
 
@@ -168,12 +174,10 @@ try {
     case "settings":
       await configCmd(args);
       break;
-    case "ui":
-
     case "dash":
     case "dashboard":
-    case "room":
-      await ui();
+    case "ui":
+      await webDash();
       break;
 
     case "tui":
@@ -689,25 +693,42 @@ function plan(args: readonly string[]): void {
   process.stdout.write(`${JSON.stringify(planObjective(objective), null, 2)}\n`);
 }
 
-async function ui(): Promise<void> {
-  const config = await loadRuntimeConfig({ workspace: process.cwd() });
-  const chronicle = new JsonChronicle(resolve(config.memoryDir));
-  const registry = await createCliRuneRegistry(config.allowedRisks.filter(isRisk), false);
-  const flowBus = new FlowBus(); // Static snapshot for dashboard
+async function webDash(): Promise<void> {
+  const workspace = process.cwd();
+  const config = await loadRuntimeConfig({ workspace });
   
-  process.stdout.write(ansi.clear);
-  process.stdout.write(
-    renderDashboard({
-      title: "Rimuru Sovereign Dashboard",
-      status: "System Online • Observing Workspace",
-      provider: config.provider,
-      model: config.model,
-      workspace: process.cwd(),
-      events: flowBus.snapshot(),
-      runes: registry.list().map(r => r.name),
-      sessions: await chronicle.listSessions()
-    }) + "\n"
-  );
+  // 1. Ensure Gate is running
+  const status = await getGateStatus(workspace);
+  if (status.state === "offline") {
+    console.log(paint("Launching Sovereign Gate...", ansi.cyan));
+    listenGateServer({ 
+      workspace, 
+      config,
+      port: config.gatewayPort
+    }).then(handle => {
+      console.log(paint(`Gate online at ${handle.url}`, ansi.gray));
+    }).catch(err => console.error("Failed to start Gate:", err));
+  }
+
+  // 2. Serve Static Web UI
+  const distPath = h();
+  const publicPath = existsSync(join(distPath, "index.html")) 
+    ? distPath 
+    : resolve(distPath, "..", "public");
+
+  const serve = sirv(publicPath, { dev: false, single: true });
+  const port = 19711;
+
+  const server = createServer((req, res) => {
+    serve(req, res);
+  });
+
+  server.listen(port, "127.0.0.1", () => {
+    const url = `http://127.0.0.1:${port}`;
+    console.log(paint(`\nSovereign Dashboard live at ${url}`, ansi.green, ansi.bold));
+    console.log(paint("Press Ctrl+C to close the dashboard server.\n", ansi.gray));
+    open(url).catch(() => {});
+  });
 }
 
 

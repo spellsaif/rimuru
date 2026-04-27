@@ -46,7 +46,10 @@ export type Flow =
   | { readonly type: "rune.denied"; readonly rune: string; readonly reason: string; readonly at: Date }
   | { readonly type: "memory.saved"; readonly count: number; readonly at: Date }
   | { readonly type: "thought.emitted"; readonly thought: string; readonly at: Date }
-  | { readonly type: "run.completed"; readonly sessionId: string; readonly at: Date };
+  | { readonly type: "run.completed"; readonly sessionId: string; readonly at: Date }
+  | { readonly type: "circle.pairing_requested"; readonly circle: string; readonly kind: string; readonly data?: any; readonly at: Date }
+  | { readonly type: "circle.connected"; readonly circle: string; readonly kind: string; readonly at: Date }
+  | { readonly type: "circle.message_received"; readonly circle: string; readonly from: string; readonly text: string; readonly at: Date };
 
 
 export interface Shard {

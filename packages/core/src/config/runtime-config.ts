@@ -31,7 +31,7 @@ export interface VesselConfig {
 
 export interface CircleConfig {
   readonly name: string;
-  readonly kind: "local" | "webhook" | "telegram" | "slack" | "discord";
+  readonly kind: "local" | "webhook" | "telegram" | "slack" | "discord" | "whatsapp";
   readonly enabled?: boolean;
   readonly tokenEnv?: string;
   readonly allowFrom?: readonly string[];

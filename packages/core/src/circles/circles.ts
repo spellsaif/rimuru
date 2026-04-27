@@ -1,4 +1,5 @@
 import type { CircleConfig, RuntimeConfig } from "../config/runtime-config.js";
+import type { FlowBus } from "../core/events.js";
 
 export interface CircleSummary {
   readonly name: string;
