@@ -41,7 +41,7 @@ export async function runInteractiveTui(options: InteractiveTuiOptions): Promise
   }
 
   // 2. Lazy Import of OpenTUI core to prevent load-time FFI crashes on Node.js
-  const { createCliRenderer, Box, Text, Markdown, Input, SyntaxStyle } = await import("@opentui/core");
+  const { createCliRenderer, Box, Text, MarkdownRenderable, Input, SyntaxStyle } = await import("@opentui/core");
 
   // 3. Initialize State
   let state: TuiState = {
@@ -77,7 +77,7 @@ export async function runInteractiveTui(options: InteractiveTuiOptions): Promise
     justifyContent: "center"
   }, titleText);
 
-  const chatMarkdown = Markdown({
+  const chatMarkdown = new MarkdownRenderable(renderer, {
     content: "# Chat History\nWaiting for conversation...",
     syntaxStyle: SyntaxStyle.create(),
     width: "100%",
