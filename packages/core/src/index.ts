@@ -12,7 +12,7 @@ export { RuneRegistry, workspaceRune } from "./core/runes.js";
 export { Sovereign } from "./core/sovereign.js";
 export { loadRuntimeConfig } from "./config/runtime-config.js";
 export { validateRuntimeConfig } from "./config/validate.js";
-export { createRuntime, createRuntimeRuneRegistry, isRisk, runAgentTurn, runChatTurn, runtimePaths } from "./runtime/runtime.js";
+export { createRuntime, createRuntimeRuneRegistry, isRisk, runAgentTurn, runChatTurn, runtimePaths, discoverSandboxedRunes } from "./runtime/runtime.js";
 export { createShard } from "./providers/factory.js";
 // Gate logic moved to @rimuru/gate
 
@@ -35,6 +35,7 @@ export { renderSystemdUserService, writeSystemdUserService } from "./service/ser
 export { deleteVaultSecret, getVaultSecret, listVaultSecrets, setVaultSecret } from "@rimuru/vault";
 
 export { activeVessel, listVessels } from "./vessels/vessels.js";
+export { spawnVesselRune, delegateVesselRune, vesselsRunes } from "./runes/vessels-rune.js";
 export { discoverPluginManifests, loadPlugin, loadPluginManifest, loadPluginManifests, loadPlugins, manifestRunes, registerPlugins, validatePluginManifest } from "./plugins/manifest.js";
 export { buildLexicalIndex } from "./indexer/lexical-index.js";
 export { createSemanticMemory, HashEmbeddingProvider, JsonSemanticMemoryStore, SemanticMemory, semanticMemoryRunes } from "./memory/semantic.js";
