@@ -14,7 +14,9 @@ import { gitRunes } from "../runes/git.js";
 import { workspaceRunes } from "../runes/workspace.js";
 import { sendMessageRune } from "../runes/circle.js";
 import { Sovereign } from "../core/sovereign.js";
-import { loadSoul, discoverWorkspaceRunes } from "./discovery.js";
+import { loadSoul, discoverWorkspaceRunes, discoverSandboxedRunes } from "./discovery.js";
+export { discoverSandboxedRunes };
+import { vesselsRunes } from "../runes/vessels-rune.js";
 
 
 export interface RuntimePaths {
@@ -40,6 +42,7 @@ export interface CreateRuntimeOptions {
   readonly flowBus?: FlowBus;
   readonly approvals?: boolean;
   readonly approvalPrompt?: (request: PermissionRequest) => Promise<PermissionDecision>;
+  readonly systemPrompt?: string;
 }
 
 export interface ChatTurnOptions {
@@ -62,12 +65,13 @@ export interface AgentTurnOptions {
   readonly approvalPrompt?: (request: PermissionRequest) => Promise<PermissionDecision>;
   readonly trace?: boolean;
   readonly onText?: (text: string) => void;
+  readonly systemPrompt?: string;
 }
 
 const runtimeCache = new Map<string, RuntimeServices>();
 
 export async function createRuntime(options: CreateRuntimeOptions): Promise<RuntimeServices> {
-  const cacheKey = `${options.workspace}:${options.config.vesselId}:${options.approvals ?? false}`;
+  const cacheKey = `${options.workspace}:${options.config.vesselId}:${options.approvals ?? false}:${options.systemPrompt ?? ""}`;
   const cached = runtimeCache.get(cacheKey);
   if (cached) return cached;
 
@@ -81,7 +85,7 @@ export async function createRuntime(options: CreateRuntimeOptions): Promise<Runt
     approvals: options.approvals ?? false,
     ...(options.approvalPrompt ? { approvalPrompt: options.approvalPrompt } : {})
   });
-  const soul = await loadSoul(options.workspace);
+  const soul = options.systemPrompt ?? await loadSoul(options.workspace);
   const runtime = {
     paths,
     flowBus,
@@ -108,14 +112,17 @@ export async function createRuntimeRuneRegistry(options: {
       options.approvals && options.approvalPrompt
         ? new ApprovalPermissionPolicy({ fallback: staticPolicy, prompt: options.approvalPrompt })
         : staticPolicy,
-    emit: (event) => options.flowBus?.emit(event)
+    emit: (event) => options.flowBus?.emit(event),
+    flowBus: options.flowBus
   });
   registry.register(workspaceRune);
   registry.register(sendMessageRune);
   for (const workspaceRuneItem of workspaceRunes) registry.register(workspaceRuneItem);
   for (const gitRune of gitRunes) registry.register(gitRune);
+  for (const vesselsRune of vesselsRunes) registry.register(vesselsRune);
   for (const memoryRune of semanticMemoryRunes(createSemanticMemory(resolve(options.workspace, ".rimuru")))) registry.register(memoryRune);
   for (const workspaceSkill of await discoverWorkspaceRunes(options.workspace)) registry.register(workspaceSkill);
+  for (const sandboxedRune of await discoverSandboxedRunes(options.workspace)) registry.register(sandboxedRune);
   await registerPlugins(registry, resolve(options.workspace, ".rimuru", "plugins"));
 
   return registry;
@@ -143,6 +150,7 @@ export async function runAgentTurn(options: AgentTurnOptions): Promise<AgentRunR
   const runtime = await createRuntime({
     config: options.config,
     workspace: options.workspace,
+    systemPrompt: options.systemPrompt,
     ...(options.flowBus ? { flowBus: options.flowBus } : {}),
     ...(options.approvals === undefined ? {} : { approvals: options.approvals }),
     ...(options.approvalPrompt ? { approvalPrompt: options.approvalPrompt } : {})
