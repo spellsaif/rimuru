@@ -82,7 +82,55 @@ export default function Dashboard() {
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   
   const scrollRef = useRef<HTMLDivElement>(null);
-  const GATE_URL = "http://localhost:19710";
+  const [gateUrl, setGateUrl] = useState("http://localhost:19710");
+
+  const [artifacts, setArtifacts] = useState<any[]>([]);
+  const [selectedArtifact, setSelectedArtifact] = useState<any | null>(null);
+  const [showCanvas, setShowCanvas] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const origin = window.location.origin;
+      if (window.location.port === "19711") {
+        setGateUrl(origin.replace(":19711", ":19710"));
+      } else if (window.location.port === "3000") {
+        setGateUrl("http://localhost:19710");
+      } else {
+        setGateUrl(origin);
+      }
+    }
+  }, []);
+
+  const fetchArtifacts = async () => {
+    try {
+      const res = await fetch(`${gateUrl}/canvas`);
+      if (res.ok) {
+        const data = await res.json();
+        const list = data.artifacts || [];
+        setArtifacts(list);
+        if (list.length > 0 && !selectedArtifact) {
+          fetchArtifactContent(list[0].title);
+          setShowCanvas(true);
+        }
+      }
+    } catch (e) {}
+  };
+
+  const fetchArtifactContent = async (title: string) => {
+    try {
+      const res = await fetch(`${gateUrl}/canvas/${encodeURIComponent(title)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedArtifact(data);
+      }
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    fetchArtifacts();
+    const timer = setInterval(fetchArtifacts, 3000);
+    return () => clearInterval(timer);
+  }, [gateUrl, selectedArtifact]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -108,7 +156,7 @@ export default function Dashboard() {
     setIsThinking(true);
 
     try {
-      const response = await fetch(`${GATE_URL}/chat/stream`, {
+      const response = await fetch(`${gateUrl}/chat/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: input, sessionId: "web-session" })
@@ -133,6 +181,7 @@ export default function Dashboard() {
                 setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: fullContent } : m));
               } else if (data.type === "done") {
                 setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: data.response.content } : m));
+                fetchArtifacts();
               }
             } catch (e) {}
           }
@@ -192,75 +241,121 @@ export default function Dashboard() {
       </header>
 
       {/* Main Experience */}
-      <main className="flex-1 flex flex-col relative pt-16">
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 py-12 space-y-12 no-scrollbar">
-          {messages.length === 0 && (
-            <div className="h-full flex flex-col items-center justify-center opacity-10">
-               <Zap className="w-16 h-16 mb-6" />
-               <h1 className="text-sm font-bold tracking-[0.3em] uppercase">Ready for Input</h1>
-            </div>
-          )}
+      <main className="flex-1 flex pt-16 overflow-hidden">
+        {/* Left Side: Chat */}
+        <div className={cn("flex-1 flex flex-col h-full border-r transition-all duration-300", showCanvas ? "w-1/2" : "w-full")} style={{ borderColor: theme.border }}>
+          <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 py-12 space-y-12 no-scrollbar">
+            {messages.length === 0 && (
+              <div className="h-full flex flex-col items-center justify-center opacity-10">
+                 <Zap className="w-16 h-16 mb-6" />
+                 <h1 className="text-sm font-bold tracking-[0.3em] uppercase">Ready for Input</h1>
+              </div>
+            )}
 
-          {messages.map((msg, idx) => (
-            <div 
-              key={msg.id} 
-              className={cn(
-                "w-full px-12 py-10 transition-all duration-500 border-l-4",
-                msg.role === 'user' ? "bg-white/[0.02] border-white/20" : "bg-transparent border-transparent"
-              )}
-              style={{ borderLeftColor: msg.role === 'assistant' ? theme.accent : undefined }}
-            >
-               <div className="max-w-[1400px] mx-auto flex gap-12">
-                  <div className="shrink-0 w-12 flex flex-col items-center">
-                    <div className="w-8 h-8 rounded flex items-center justify-center border" style={{ borderColor: theme.border }}>
-                       {msg.role === 'user' ? <Command className="w-4 h-4 opacity-40" /> : <Zap className="w-4 h-4" style={{ color: theme.accent }} />}
+            {messages.map((msg, idx) => (
+              <div 
+                key={msg.id} 
+                className={cn(
+                  "w-full px-12 py-10 transition-all duration-500 border-l-4",
+                  msg.role === 'user' ? "bg-white/[0.02] border-white/20" : "bg-transparent border-transparent"
+                )}
+                style={{ borderLeftColor: msg.role === 'assistant' ? theme.accent : undefined }}
+              >
+                 <div className="max-w-[1400px] mx-auto flex gap-12">
+                    <div className="shrink-0 w-12 flex flex-col items-center">
+                      <div className="w-8 h-8 rounded flex items-center justify-center border" style={{ borderColor: theme.border }}>
+                         {msg.role === 'user' ? <Command className="w-4 h-4 opacity-40" /> : <Zap className="w-4 h-4" style={{ color: theme.accent }} />}
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex-1 text-lg leading-relaxed font-normal" style={{ color: theme.text }}>
-                     <MarkdownContent content={msg.content} theme={theme} />
-                     {isThinking && idx === messages.length - 1 && msg.role === 'assistant' && (
-                       <span className="inline-block w-1.5 h-4 ml-1 animate-pulse" style={{ backgroundColor: theme.text }} />
-                     )}
-                  </div>
+                    <div className="flex-1 text-lg leading-relaxed font-normal" style={{ color: theme.text }}>
+                       <MarkdownContent content={msg.content} theme={theme} />
+                       {isThinking && idx === messages.length - 1 && msg.role === 'assistant' && (
+                         <span className="inline-block w-1.5 h-4 ml-1 animate-pulse" style={{ backgroundColor: theme.text }} />
+                       )}
+                    </div>
 
-               </div>
+                 </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="border-t px-12 py-8" style={{ borderColor: theme.border }}>
+            <div className="max-w-[1400px] mx-auto relative">
+               <form onSubmit={handleSend} className="flex items-center gap-4">
+                  <Plus className="w-5 h-5 cursor-pointer transition-colors" style={{ color: `${theme.text}66` }} />
+                  <input 
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="Enter command..."
+                    className="flex-1 bg-transparent border-none outline-none py-2 text-lg font-normal"
+                    style={{ color: theme.text }}
+                  />
+                  <button 
+                    type="submit" 
+                    disabled={!input.trim() || isThinking}
+                    className="transition-colors disabled:opacity-10"
+                    style={{ color: `${theme.text}66` }}
+                  >
+                    <Send className="w-5 h-5 hover:opacity-100" style={{ color: theme.text }} />
+                  </button>
+               </form>
             </div>
-          ))}
-
-
-        </div>
-
-        <div className="border-t px-12 py-8" style={{ borderColor: theme.border }}>
-          <div className="max-w-[1400px] mx-auto relative">
-
-             <form onSubmit={handleSend} className="flex items-center gap-4">
-                <Plus className="w-5 h-5 cursor-pointer transition-colors" style={{ color: `${theme.text}66` }} />
-                <input 
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Enter command..."
-                  className="flex-1 bg-transparent border-none outline-none py-2 text-lg font-normal"
-                  style={{ color: theme.text }}
-                />
-                <button 
-                  type="submit" 
-                  disabled={!input.trim() || isThinking}
-                  className="transition-colors disabled:opacity-10"
-                  style={{ color: `${theme.text}66` }}
-                >
-                  <Send className="w-5 h-5 hover:opacity-100" style={{ color: theme.text }} />
-                </button>
-             </form>
-
-
           </div>
         </div>
+
+        {/* Right Side: Interactive Canvas preview panel */}
+        {showCanvas && (
+          <div className="w-1/2 h-full flex flex-col" style={{ backgroundColor: theme.surface }}>
+            <div className="h-14 border-b flex items-center justify-between px-6 shrink-0" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
+              <div className="flex items-center gap-3">
+                <FileCode className="w-4 h-4" style={{ color: theme.accent }} />
+                <span className="text-xs font-bold uppercase tracking-wider">Visual Canvas</span>
+              </div>
+              <select 
+                value={selectedArtifact?.title || ""} 
+                onChange={(e) => fetchArtifactContent(e.target.value)}
+                className="bg-transparent border rounded px-3 py-1 text-xs outline-none focus:ring-1"
+                style={{ borderColor: theme.border, color: theme.text }}
+              >
+                {artifacts.map(a => (
+                  <option key={a.title} value={a.title} className="bg-black text-white">{a.title} ({a.kind})</option>
+                ))}
+              </select>
+            </div>
+            
+            {selectedArtifact ? (
+              <div className="flex-1 flex flex-col overflow-hidden relative">
+                {selectedArtifact.kind === "html" ? (
+                  <iframe
+                    title={selectedArtifact.title}
+                    srcDoc={selectedArtifact.content}
+                    className="w-full flex-1 border-none bg-white"
+                    sandbox="allow-scripts"
+                  />
+                ) : selectedArtifact.kind === "markdown" ? (
+                  <div className="flex-1 overflow-y-auto p-8">
+                    <MarkdownContent content={selectedArtifact.content} theme={theme} />
+                  </div>
+                ) : (
+                  <pre className="flex-1 overflow-auto p-8 text-sm font-mono whitespace-pre-wrap">
+                    {selectedArtifact.content}
+                  </pre>
+                )}
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center opacity-25">
+                <FileCode className="w-12 h-12 mb-4" />
+                <span className="text-xs uppercase font-bold tracking-wider">No Canvas Artifact Available</span>
+              </div>
+            )}
+          </div>
+        )}
       </main>
 
       {/* Side Utilities */}
       <div className="w-16 border-l flex flex-col items-center py-8 gap-8" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
-        <SideIcon icon={MessageSquare} theme={theme} />
-        <SideIcon icon={FileCode} theme={theme} />
+        <SideIcon icon={MessageSquare} theme={theme} active={!showCanvas} onClick={() => setShowCanvas(false)} />
+        <SideIcon icon={FileCode} theme={theme} active={showCanvas} onClick={() => setShowCanvas(true)} />
         <SideIcon icon={Activity} theme={theme} />
       </div>
 
@@ -275,10 +370,10 @@ export default function Dashboard() {
   );
 }
 
-function SideIcon({ icon: Icon, theme }: { icon: any, theme: ThemeConfig }) {
+function SideIcon({ icon: Icon, theme, active, onClick }: { icon: any, theme: ThemeConfig, active?: boolean, onClick?: () => void }) {
   return (
-    <button className="transition-colors" style={{ color: `${theme.text}66` }}>
-      <Icon className="w-5 h-5 hover:opacity-100" style={{ color: theme.text }} />
+    <button onClick={onClick} className="transition-colors" style={{ color: active ? theme.accent : `${theme.text}66` }}>
+      <Icon className="w-5 h-5 hover:opacity-100" style={{ color: active ? theme.accent : theme.text }} />
     </button>
   );
 }
