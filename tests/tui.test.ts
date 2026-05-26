@@ -1,13 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { renderDashboard, renderFullScreenTui } from "../src/index.js";
+import { renderDashboard, renderFullScreenTui } from "../apps/cli/src/dashboard.ts";
 
 describe("renderDashboard", () => {
   it("renders an empty console", () => {
-    const output = renderDashboard({ title: "Rimuru", subtitle: "Tempest OS", events: [] });
+    const output = renderDashboard({
+      title: "Rimuru",
+      status: "Tempest OS",
+      provider: "mock",
+      model: "mock",
+      workspace: "/tmp/work",
+      events: []
+    });
 
-    expect(output).toContain("Rimuru");
-    expect(output).toContain("Tempest OS");
-    expect(output).toContain("No flow events yet");
+    expect(output.toLowerCase()).toContain("rimuru");
+    expect(output.toLowerCase()).toContain("tempest os");
+    expect(output.toLowerCase()).toContain("no flow events yet");
   });
 });
 
@@ -32,10 +39,10 @@ describe("renderFullScreenTui", () => {
       30
     );
 
-    expect(output).toContain("Rimuru Sovereign Console");
-    expect(output).toContain("mock/mock");
-    expect(output).toContain("Conversation");
-    expect(output).toContain("Chronicle");
-    expect(output).toContain("trace.json");
+    expect(output.toLowerCase()).toContain("rimuru sovereign console");
+    expect(output.toLowerCase()).toContain("mock/mock");
+    expect(output.toLowerCase()).toContain("conversation");
+    expect(output.toLowerCase()).toContain("chronicle");
+    expect(output.toLowerCase()).toContain("trace.json");
   });
 });

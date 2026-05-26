@@ -1,5 +1,5 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import {
@@ -20,7 +20,7 @@ describe("advanced foundations", () => {
   });
 
   it("resolves only paths inside the workspace", () => {
-    expect(resolveWorkspacePath("/tmp/work", "src/a.ts")).toBe("/tmp/work/src/a.ts");
+    expect(resolveWorkspacePath("/tmp/work", "src/a.ts")).toBe(resolve("/tmp/work", "src/a.ts"));
     expect(() => resolveWorkspacePath("/tmp/work", "../secret")).toThrow("Path escapes workspace");
   });
 

@@ -24,7 +24,7 @@ describe("providers", () => {
 
   it("creates provider-specific shards", () => {
     expect(createShard({ provider: "ollama", model: "llama", sessionId: "s", memoryDir: "/tmp", allowedRisks: ["read"] }).name).toBe("openai-compatible");
-    expect(createShard({ provider: "openrouter", apiKey: "k", model: "m", sessionId: "s", memoryDir: "/tmp", allowedRisks: ["read"] }).name).toBe("openai-compatible");
+    expect(createShard({ provider: "openrouter", apiKey: "k", model: "m", sessionId: "s", memoryDir: "/tmp", allowedRisks: ["read"] }).name).toBe("openrouter");
   });
 
   it("calls Anthropic messages API", async () => {

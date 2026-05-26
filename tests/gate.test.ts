@@ -2,7 +2,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { getGateRuntimeStatus, getGateStatus, readGateState, writeGateState, type RuntimeConfig } from "../src/index.js";
+import { getGateRuntimeStatus, getGateStatus, readGateState, writeGateState } from "../packages/gate/src/index.ts";
+import type { RuntimeConfig } from "../src/index.js";
 
 describe("getGateStatus", () => {
   it("maps runtime config to Rimuru Gate vocabulary", () => {

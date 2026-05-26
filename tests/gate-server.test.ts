@@ -2,7 +2,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { listenGateServer, type RuntimeConfig } from "../src/index.js";
+import { listenGateServer } from "../packages/gate/src/index.ts";
+import type { RuntimeConfig } from "../src/index.js";
 
 describe("Gate HTTP server", () => {
   it("serves status, runes, sessions, and chat", async () => {

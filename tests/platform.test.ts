@@ -2,7 +2,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { approvePairing, createCanvasArtifact, createRitual, getVaultSecret, listCanvasArtifacts, listPairings, listRituals, listVaultSecrets, listVessels, loadRuntimeConfig, normalizeDiscordEvent, requestPairing, setVaultSecret, setupWorkspace, validateRuntimeConfig } from "../src/index.js";
+import { approvePairing, createCanvasArtifact, createRitual, getVaultSecret, getCircleAdapter, listCanvasArtifacts, listPairings, listRituals, listVaultSecrets, listVessels, loadRuntimeConfig, requestPairing, setVaultSecret, validateRuntimeConfig } from "../src/index.js";
+import { setupWorkspace } from "../apps/cli/src/setup.ts";
 
 describe("platform spine", () => {
   it("sets up a workspace with vessel config", async () => {
@@ -49,8 +50,8 @@ describe("platform spine", () => {
       const config = await loadRuntimeConfig({ workspace: root, env: {} });
 
       expect(validateRuntimeConfig(config, {})).toEqual(expect.arrayContaining([expect.objectContaining({ code: "provider.missing_api_key" }), expect.objectContaining({ code: "policy.unbarriered_power" })]));
-      expect(normalizeDiscordEvent({ name: "discord", kind: "discord" }, { content: "hello", author: { username: "alice" } })).toMatchObject({ circle: "discord", from: "alice", text: "hello" });
-      expect(normalizeDiscordEvent({ name: "discord", kind: "discord" }, { type: 1 })).toEqual({ pong: true });
+      expect(getCircleAdapter("discord")!.normalize({ name: "discord", kind: "discord" }, { content: "hello", author: { username: "alice" } })).toMatchObject({ circle: "discord", from: "alice", text: "hello" });
+      expect(getCircleAdapter("discord")!.normalize({ name: "discord", kind: "discord" }, { type: 1 })).toEqual({ pong: true });
     } finally {
       await rm(root, { recursive: true, force: true });
     }

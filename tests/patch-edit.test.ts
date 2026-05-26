@@ -44,7 +44,7 @@ describe("patch-based editing", () => {
       expect(await readFile(join(root, "story.txt"), "utf8")).toBe("hello\nclaw\nworld\n");
 
       const applied = await applyPatchRune.invoke({ patch }, { workspace: root, sessionId: "s" });
-      expect(applied.files[0]?.rollbackPath).toContain(".rimuru/rollbacks");
+      expect(applied.files[0]?.rollbackPath?.replace(/\\/g, "/")).toContain(".rimuru/rollbacks");
       expect(await readFile(join(root, "story.txt"), "utf8")).toBe("hello\nrimuru\nworld\n");
     } finally {
       await rm(root, { recursive: true, force: true });
