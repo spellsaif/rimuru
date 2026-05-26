@@ -1,6 +1,9 @@
 import qrcode from "qrcode-terminal";
 import pkg from "whatsapp-web.js";
 const { Client, LocalAuth } = pkg;
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { execSync } from "node:child_process";
 
 import type { CircleConfig } from "../config/runtime-config.js";
 import type { CircleAdapter, CircleMessage } from "./circles.js";
@@ -11,6 +14,48 @@ import { requireSenderAllowed } from "../security/pairing.js";
 
 // Keep track of active clients for the 'send' method
 const ACTIVE_CLIENTS: Map<string, any> = new Map();
+
+function getBrowserPath(): string | undefined {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+  
+  if (process.platform === "win32") {
+    const paths = [
+      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+      process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, "Google\\Chrome\\Application\\chrome.exe") : ""
+    ].filter(Boolean);
+    for (const p of paths) {
+      if (existsSync(p)) return p;
+    }
+  } else if (process.platform === "darwin") {
+    const paths = [
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      "/Applications/Chromium.app/Contents/MacOS/Chromium"
+    ];
+    for (const p of paths) {
+      if (existsSync(p)) return p;
+    }
+  } else if (process.platform === "linux") {
+    const commands = ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"];
+    for (const cmd of commands) {
+      try {
+        const path = execSync(`which ${cmd}`, { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+        if (path) return path;
+      } catch {}
+    }
+    const paths = [
+      "/usr/bin/google-chrome",
+      "/usr/bin/chromium",
+      "/usr/bin/chromium-browser"
+    ];
+    for (const p of paths) {
+      if (existsSync(p)) return p;
+    }
+  }
+  return undefined;
+}
 
 /**
  * Basic Markdown to WhatsApp formatter.
@@ -52,12 +97,17 @@ export const WHATSAPP_ADAPTER: CircleAdapter = {
   async start(circle, { workspace, flowBus }) {
     console.log(`[whatsapp] Initializing WhatsApp Circle: ${circle.name}...`);
 
+    const browserPath = getBrowserPath();
+    if (!browserPath) {
+      throw new Error(`[whatsapp] Could not automatically locate Google Chrome or Chromium. Please set the PUPPETEER_EXECUTABLE_PATH environment variable.`);
+    }
+
     const client = new Client({
       authStrategy: new LocalAuth({
-        dataPath: `.rimuru/circles/${circle.name}/auth`
+        dataPath: join(workspace, ".rimuru", "circles", circle.name, "auth")
       }),
       puppeteer: {
-        executablePath: "/home/nanasi/.cache/puppeteer/chrome/linux-147.0.7727.57/chrome-linux64/chrome",
+        executablePath: browserPath,
         args: ["--no-sandbox", "--disable-setuid-sandbox"]
       }
     });
