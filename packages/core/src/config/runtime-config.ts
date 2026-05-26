@@ -34,6 +34,10 @@ export interface CircleConfig {
   readonly kind: "local" | "webhook" | "telegram" | "slack" | "discord" | "whatsapp";
   readonly enabled?: boolean;
   readonly tokenEnv?: string;
+  readonly token?: string;
+  readonly signingSecret?: string;
+  readonly publicKey?: string;
+  readonly secret?: string;
   readonly allowFrom?: readonly string[];
   readonly sessionId?: string;
 }
