@@ -16,6 +16,7 @@
     "@biomejs/biome": "1.9.4",
     "@types/node": "^25.6.0",
     "turbo": "latest",
-    "typescript": "latest"
+    "typescript": "latest",
+    "vitest": "^2.1.8"
   }
 }
