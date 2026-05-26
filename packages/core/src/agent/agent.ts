@@ -2,6 +2,7 @@ import type { RuneRegistry } from "../core/runes.js";
 import type { Sovereign } from "../core/sovereign.js";
 import type { RunResult, Flow } from "../core/types.js";
 import { FlowBus } from "../core/events.js";
+import { planObjective, type Plan } from "../planner/planner.js";
 
 
 export interface AgentObservation {
@@ -14,6 +15,7 @@ export interface AgentObservation {
 }
 
 export interface AgentRunResult {
+  readonly plan: Plan;
   readonly observations: readonly AgentObservation[];
   readonly final: RunResult;
 }
@@ -91,6 +93,8 @@ export class AgentLoop {
       }
     }
 
+    const plan = planObjective(objective);
+
     // Final synthesis
     const final = await this.options.sovereign.run({
       prompt: `Objective: ${objective}\n\nHistory of thoughts and tool outputs:\n${JSON.stringify(observations, null, 2)}\n\nBased on the above, provide the final answer to the user.`,
@@ -99,7 +103,7 @@ export class AgentLoop {
       ...(onText ? { onText } : {})
     });
 
-    return { observations, final };
+    return { plan, observations, final };
   }
 
   private buildReActPrompt(objective: string, history: readonly AgentObservation[], runes: unknown[]): string {
@@ -122,7 +126,7 @@ export class AgentLoop {
 
 function parseAction(content: string): { type: "call" | "finish"; thought: string; rune?: string; input?: unknown } | undefined {
   const thoughtMatch = content.match(/Thought:\s*(.*)/i);
-  const actionMatch = content.match(/Action:\s*(\w+)/i);
+  const actionMatch = content.match(/Action:\s*([a-zA-Z0-9._-]+)/i);
   const inputMatch = content.match(/Input:\s*(\{[\s\S]*\})/);
 
   const thought = thoughtMatch?.[1] ?? "Continuing work";

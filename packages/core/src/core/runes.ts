@@ -1,6 +1,7 @@
 import { appendAuditEvent } from "./audit.js";
 import type { Flow } from "./types.js";
 import type { PermissionPolicy, Rune, RuneContext, RuneSchema } from "./types.js";
+import { z } from "zod";
 
 export interface RuneRegistryOptions {
   readonly policy?: PermissionPolicy;
@@ -25,6 +26,23 @@ export class RuneRegistry {
       throw new Error(`Rune already registered: ${rune.name}`);
     }
     this.#runes.set(rune.name, rune);
+    if (rune.onRegister) {
+      Promise.resolve(rune.onRegister(this)).catch((error) => {
+        console.error(`[runes] Error running onRegister hook for ${rune.name}:`, error);
+      });
+    }
+  }
+
+  deregister(name: string): void {
+    const rune = this.#runes.get(name);
+    if (rune) {
+      this.#runes.delete(name);
+      if (rune.onDeregister) {
+        Promise.resolve(rune.onDeregister(this)).catch((error) => {
+          console.error(`[runes] Error running onDeregister hook for ${rune.name}:`, error);
+        });
+      }
+    }
   }
 
   list(): readonly Rune[] {
@@ -61,11 +79,60 @@ export class RuneRegistry {
     }
     await audit(context, { type: "rune.allowed", sessionId: context.sessionId, rune: name, risk: rune.risk, input, reason: decision?.reason ?? "no policy configured" });
     try {
-      const output = await rune.invoke(input, context);
+      const state = context.state ?? {};
+      const enrichedContext: RuneContext = {
+        ...context,
+        registry: this,
+        state
+      };
+      const output = await rune.invoke(input, enrichedContext);
       validateSchema(rune.outputSchema, output, `Rune output invalid: ${name}`);
       this.#emit?.({ type: "rune.completed", rune: name, at: this.#clock() });
       await audit(context, { type: "rune.completed", sessionId: context.sessionId, rune: name, risk: rune.risk, output });
       return output;
+    } catch (error) {
+      await audit(context, { type: "rune.failed", sessionId: context.sessionId, rune: name, risk: rune.risk, error: error instanceof Error ? error.message : String(error) });
+      throw error;
+    }
+  }
+
+  async *invokeStream(name: string, input: unknown, context: RuneContext): AsyncIterable<unknown> {
+    const rune = this.#runes.get(name);
+    if (!rune) throw new Error(`Unknown rune: ${name}`);
+    validateSchema(rune.inputSchema, input, `Rune input invalid: ${name}`);
+    this.#emit?.({ type: "rune.requested", rune: name, at: this.#clock() });
+    await audit(context, { type: "rune.requested", sessionId: context.sessionId, rune: name, risk: rune.risk, input });
+    const decision = await this.#policy?.decide({
+      rune: rune.name,
+      risk: rune.risk,
+      input,
+      workspace: context.workspace,
+      sessionId: context.sessionId
+    });
+    if (decision && !decision.allowed) {
+      this.#emit?.({ type: "rune.denied", rune: name, reason: decision.reason, at: this.#clock() });
+      await audit(context, { type: "rune.denied", sessionId: context.sessionId, rune: name, risk: rune.risk, input, reason: decision.reason });
+      throw new Error(`Rune denied: ${name}: ${decision.reason}`);
+    }
+    await audit(context, { type: "rune.allowed", sessionId: context.sessionId, rune: name, risk: rune.risk, input, reason: decision?.reason ?? "no policy configured" });
+    try {
+      const state = context.state ?? {};
+      const enrichedContext: RuneContext = {
+        ...context,
+        registry: this,
+        state
+      };
+      if (rune.invokeStream) {
+        for await (const chunk of rune.invokeStream(input, enrichedContext)) {
+          yield chunk;
+        }
+      } else {
+        const output = await rune.invoke(input, enrichedContext);
+        validateSchema(rune.outputSchema, output, `Rune output invalid: ${name}`);
+        yield output;
+      }
+      this.#emit?.({ type: "rune.completed", rune: name, at: this.#clock() });
+      await audit(context, { type: "rune.completed", sessionId: context.sessionId, rune: name, risk: rune.risk, output: "stream completed" });
     } catch (error) {
       await audit(context, { type: "rune.failed", sessionId: context.sessionId, rune: name, risk: rune.risk, error: error instanceof Error ? error.message : String(error) });
       throw error;
@@ -88,18 +155,32 @@ export const workspaceRune: Rune<{ readonly question: string }, { readonly answe
 
 function validateSchema(schema: RuneSchema | undefined, value: unknown, prefix: string): void {
   if (!schema) return;
-  if (schema.type === "object" && (typeof value !== "object" || value === null || Array.isArray(value))) throw new Error(`${prefix}: expected object`);
-  const record = value as Record<string, unknown>;
-  for (const key of schema.required ?? []) {
-    if (!(key in record)) throw new Error(`${prefix}: missing '${key}'`);
-  }
-  for (const [key, property] of Object.entries(schema.properties ?? {})) {
-    if (!(key in record) || record[key] === undefined) continue;
-    if (property.type === "array") {
-      if (!Array.isArray(record[key])) throw new Error(`${prefix}: '${key}' must be array`);
-    } else if (typeof record[key] !== property.type) {
-      throw new Error(`${prefix}: '${key}' must be ${property.type}`);
+  let zodSchema: z.ZodType<any> = z.any();
+  if (schema.type === "object") {
+    const shape: Record<string, z.ZodType<any>> = {};
+    for (const [key, prop] of Object.entries(schema.properties ?? {})) {
+      let fieldSchema: z.ZodType<any>;
+      if (prop.type === "array") {
+        fieldSchema = z.array(z.any());
+      } else if (prop.type === "boolean") {
+        fieldSchema = z.boolean();
+      } else if (prop.type === "number") {
+        fieldSchema = z.number();
+      } else if (prop.type === "string") {
+        fieldSchema = z.string();
+      } else {
+        fieldSchema = z.any();
+      }
+      if (!schema.required?.includes(key)) {
+        fieldSchema = fieldSchema.optional();
+      }
+      shape[key] = fieldSchema;
     }
+    zodSchema = z.object(shape);
+  }
+  const result = zodSchema.safeParse(value);
+  if (!result.success) {
+    throw new Error(`${prefix}: ${result.error.issues.map((e: any) => `${e.path.join(".")}: ${e.message}`).join(", ")}`);
   }
 }
 

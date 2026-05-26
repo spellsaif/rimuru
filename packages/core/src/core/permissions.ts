@@ -52,3 +52,37 @@ export class ApprovalPermissionPolicy implements PermissionPolicy {
     return prompted;
   }
 }
+
+export class ConsensusPermissionPolicy implements PermissionPolicy {
+  readonly #voters: readonly PermissionPolicy[];
+  readonly #requiredApprovals: number;
+
+  constructor(options: { readonly voters: readonly PermissionPolicy[]; readonly requiredApprovals?: number }) {
+    this.#voters = options.voters;
+    this.#requiredApprovals = options.requiredApprovals ?? options.voters.length;
+  }
+
+  async decide(request: PermissionRequest): Promise<PermissionDecision> {
+    let approvals = 0;
+    const reasons: string[] = [];
+    
+    for (const voter of this.#voters) {
+      try {
+        const decision = await voter.decide(request);
+        if (decision.allowed) {
+          approvals++;
+          reasons.push(decision.reason);
+        } else {
+          reasons.push(`denied: ${decision.reason}`);
+        }
+      } catch (e: any) {
+        reasons.push(`error: ${e.message}`);
+      }
+    }
+    
+    if (approvals >= this.#requiredApprovals) {
+      return { allowed: true, reason: `Consensus reached (${approvals}/${this.#voters.length}): ${reasons.join("; ")}` };
+    }
+    return { allowed: false, reason: `Consensus failed (${approvals}/${this.#requiredApprovals} approvals): ${reasons.join("; ")}` };
+  }
+}

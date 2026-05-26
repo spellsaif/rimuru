@@ -9,8 +9,9 @@ export function resolveWorkspacePath(workspace: string, path: string): string {
   }
 
   // Sovereign Blindspot: Forbid AI from reading its own internal secrets
+  const normalizedRel = rel.replace(/\\/g, "/");
   const sensitivePaths = [".rimuru/circles", ".rimuru/vault.json", "rimuru.config.json"];
-  if (sensitivePaths.some(p => rel === p || rel.startsWith(`${p}${sep}`))) {
+  if (sensitivePaths.some(p => normalizedRel === p || normalizedRel.startsWith(`${p}/`))) {
     throw new Error(`Access to sensitive Sovereign internal path denied: ${rel}`);
   }
 

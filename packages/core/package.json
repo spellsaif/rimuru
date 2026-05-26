@@ -14,7 +14,9 @@
     "@rimuru/vault": "workspace:*",
     "glob": "^13.0.6",
     "qrcode-terminal": "^0.12.0",
-    "whatsapp-web.js": "^1.34.7"
+    "quickjs-emscripten": "^0.32.0",
+    "whatsapp-web.js": "^1.34.7",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/qrcode-terminal": "^0.12.2",

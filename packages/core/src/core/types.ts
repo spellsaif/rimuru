@@ -71,6 +71,9 @@ export interface Rune<Input = unknown, Output = unknown> {
   readonly inputSchema?: RuneSchema;
   readonly outputSchema?: RuneSchema;
   invoke(input: Input, context: RuneContext): Promise<Output>;
+  invokeStream?(input: Input, context: RuneContext): AsyncIterable<unknown>;
+  onRegister?(registry: any): Promise<void> | void;
+  onDeregister?(registry: any): Promise<void> | void;
 }
 
 export interface RuneSchema {
@@ -86,6 +89,9 @@ export interface RuneContext {
   readonly sessionId: string;
   readonly audit?: boolean;
   readonly signal?: AbortSignal;
+  readonly registry?: any;
+  readonly state?: Record<string, unknown>;
+  getSecret?(name: string): Promise<string | undefined>;
 }
 
 export interface PermissionRequest {

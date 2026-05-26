@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -88,8 +88,18 @@ export async function applyUnifiedPatch(options: ApplyPatchOptions): Promise<Pat
 
   for (const file of files) {
     const target = options.resolvePath(file.newPath === "/dev/null" ? file.oldPath : file.newPath);
-    const before = await readFile(target, "utf8");
-    const after = applyPatchToText(before, file);
+    let before = "";
+    try {
+      before = await readFile(target, "utf8");
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") {
+        before = "";
+      } else {
+        throw error;
+      }
+    }
+    const isDeletion = file.newPath === "/dev/null";
+    const after = isDeletion ? "" : applyPatchToText(before, file);
     const changed = before !== after;
     let rollbackPath: string | undefined;
 
@@ -99,10 +109,15 @@ export async function applyUnifiedPatch(options: ApplyPatchOptions): Promise<Pat
         await mkdir(dirname(rollbackPath), { recursive: true });
         await writeFile(rollbackPath, `${JSON.stringify({ path: file.newPath, before, after, createdAt: new Date().toISOString() }, null, 2)}\n`, "utf8");
       }
-      await writeFile(target, after, "utf8");
-      if (options.formatter && options.formatter.length > 0) {
-        const [command, ...args] = options.formatter;
-        if (command) await execFileAsync(command, [...args, target], { cwd: options.workspace, maxBuffer: 1024 * 1024 });
+      if (isDeletion) {
+        await unlink(target);
+      } else {
+        await mkdir(dirname(target), { recursive: true });
+        await writeFile(target, after, "utf8");
+        if (options.formatter && options.formatter.length > 0) {
+          const [command, ...args] = options.formatter;
+          if (command) await execFileAsync(command, [...args, target], { cwd: options.workspace, maxBuffer: 1024 * 1024 });
+        }
       }
     }
     results.push({ path: file.newPath, changed, preview: createUnifiedPreview(file.newPath, before, after), ...(rollbackPath ? { rollbackPath } : {}) });
@@ -112,8 +127,8 @@ export async function applyUnifiedPatch(options: ApplyPatchOptions): Promise<Pat
 }
 
 export function applyPatchToText(before: string, file: PatchFile): string {
-  const hadFinalNewline = before.endsWith("\n");
-  const source = before.replace(/\n$/, "").split("\n");
+  const hadFinalNewline = before === "" ? true : before.endsWith("\n");
+  const source = before === "" ? [] : before.replace(/\n$/, "").split("\n");
   let cursor = 0;
   const output: string[] = [];
 
@@ -157,7 +172,7 @@ function createUnifiedPreview(path: string, before: string, after: string): stri
 }
 
 function cleanPatchPath(path: string): string {
-  const clean = path.split(/\s+/)[0] ?? path;
+  const clean = path.split("\t")[0]?.trim() ?? path;
   if (clean === "/dev/null") return clean;
   return clean.replace(/^[ab]\//, "");
 }

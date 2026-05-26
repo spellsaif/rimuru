@@ -4,9 +4,12 @@ import { OpenAICompatibleShard } from "./openai-compatible.js";
 import { OpenRouterShard } from "./openrouter.js";
 import { AnthropicShard } from "./anthropic.js";
 import { GeminiShard } from "./gemini.js";
+import { MockShard } from "./mock.js";
 
 export function createShard(config: RuntimeConfig): Shard {
   switch (config.provider) {
+    case "mock":
+      return new MockShard();
     case "openai-compatible":
       if (!config.baseUrl) throw new Error("RIMURU_BASE_URL is required for openai-compatible provider");
       if (!config.apiKey) throw new Error("RIMURU_API_KEY is required for openai-compatible provider");
