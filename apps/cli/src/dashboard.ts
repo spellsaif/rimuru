@@ -54,7 +54,9 @@ function renderBody(model: DashboardModel, leftWidth: number, rightWidth: number
   const rightLines = [
     paint(" LIVE FLOW LOG", ansi.bold, ansi.white),
     "",
-    ...(model.events.slice(-15).map(renderEvent))
+    ...(model.events.length > 0 
+      ? model.events.slice(-15).map(renderEvent)
+      : [paint(" No flow events yet", ansi.dim)])
   ];
 
   const maxLines = Math.max(leftLines.length, rightLines.length, 18);
@@ -94,3 +96,55 @@ function pad(value: string, width: number): string {
   if (visible.length >= width) return value.slice(0, width - 1) + "…";
   return value + " ".repeat(width - visible.length);
 }
+
+export interface FullScreenTuiModel {
+  readonly title: string;
+  readonly provider: string;
+  readonly model: string;
+  readonly sessionId: string;
+  readonly workspace: string;
+  readonly input: string;
+  readonly transcript: readonly { readonly role: string; readonly content: string }[];
+  readonly events: readonly any[];
+  readonly sessions?: readonly string[];
+  readonly traces?: readonly string[];
+  readonly mode: string;
+  readonly status: string;
+}
+
+export function renderFullScreenTui(model: FullScreenTuiModel, width: number, height: number): string {
+  const header = paint(`║ === ${model.title.toUpperCase()} ===`, ansi.cyan, ansi.bold);
+  const info = paint(`║ Provider/Model: ${model.provider}/${model.model} | Session: ${model.sessionId}`, ansi.green);
+  const workspace = paint(`║ Workspace: ${model.workspace}`, ansi.gray);
+  
+  const conversationLines = [
+    paint("╟─ Conversation ────────────────────────────────────────", ansi.cyan),
+    ...model.transcript.map(t => paint(`║  [${t.role.toUpperCase()}] ${t.content}`, ansi.white))
+  ];
+
+  const chronicleLines = [
+    paint("╟─ Chronicle & Sessions ────────────────────────────────", ansi.cyan),
+    ...(model.sessions ?? []).map(s => paint(`║  • ${s}`, ansi.magenta))
+  ];
+
+  const traceLines = [
+    paint("╟─ Traces ──────────────────────────────────────────────", ansi.cyan),
+    ...(model.traces ?? []).map(t => paint(`║  • ${t}`, ansi.yellow))
+  ];
+
+  const statusLine = paint(`║ Status: ${model.status} | Mode: ${model.mode} | Input: ${model.input}`, ansi.blue);
+
+  return [
+    paint(`╔${"═".repeat(Math.max(40, width - 2))}╗`, ansi.cyan),
+    header,
+    info,
+    workspace,
+    ...conversationLines,
+    ...chronicleLines,
+    ...traceLines,
+    paint(`╟${"─".repeat(Math.max(40, width - 2))}╢`, ansi.cyan),
+    statusLine,
+    paint(`╚${"═".repeat(Math.max(40, width - 2))}╝`, ansi.cyan)
+  ].join("\n");
+}
+

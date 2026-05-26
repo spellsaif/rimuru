@@ -42,7 +42,8 @@ import {
   getGateStatus, 
   readGateState, 
   stopGate,
-  listenGateServer
+  listenGateServer,
+  getGateRuntimeStatus
 } from "@rimuru/gate";
 import { 
   deleteVaultSecret, 
@@ -698,8 +699,8 @@ async function webDash(): Promise<void> {
   const config = await loadRuntimeConfig({ workspace });
   
   // 1. Ensure Gate is running
-  const status = await getGateStatus(workspace);
-  if (status.state === "offline") {
+  const runtimeStatus = await getGateRuntimeStatus(config, workspace);
+  if (runtimeStatus.runtime !== "running") {
     console.log(paint("Launching Sovereign Gate...", ansi.cyan));
     listenGateServer({ 
       workspace, 
