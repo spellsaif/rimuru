@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { AnthropicShard, FlowBus, GeminiShard, MemoryChronicle, MockShard, RuneRegistry, serveMcpStdio, Sovereign, workspaceRune } from "../src/index.js";
+import { AnthropicShard, FlowBus, GeminiShard, MemoryChronicle, MockShard, RuneRegistry, serveMcpStdio, Sovereign, workspaceRune, resolveWorkspacePath, applyUnifiedPatch } from "../src/index.js";
 import { runSandboxedCommand } from "../src/index.js";
 import { PassThrough } from "node:stream";
 
@@ -54,6 +54,25 @@ describe("MCP server", () => {
 describe("sandboxing", () => {
   it("denies commands in readonly sandbox", async () => {
     await expect(runSandboxedCommand({ command: "node", args: ["--version"], workspace: process.cwd() }, "readonly")).rejects.toThrow("denies command execution");
+  });
+
+  it("prevents cross-drive path traversal on Windows", () => {
+    if (process.platform === "win32") {
+      expect(() => resolveWorkspacePath("C:\\workspace", "D:\\secrets.txt")).toThrow("escapes workspace (drive boundary)");
+    }
+  });
+
+  it("validates formatter command in applyUnifiedPatch", async () => {
+    const patch = `--- /dev/null
++++ b/file.txt
+@@ -0,0 +1,1 @@
++new`;
+    await expect(applyUnifiedPatch({
+      workspace: "/tmp",
+      patch,
+      resolvePath: () => "/tmp/file.txt",
+      formatter: ["../malicious-formatter", "--arg"]
+    })).rejects.toThrow("Command must be a simple executable name");
   });
 });
 
