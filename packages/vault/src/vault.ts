@@ -83,7 +83,7 @@ function decryptSecret(entry: EncryptedSecret, env: NodeJS.ProcessEnv): string {
 }
 
 function vaultKey(env: NodeJS.ProcessEnv): Buffer {
-  const secret = env.RIMURU_VAULT_KEY ?? `rimuru-local:${process.platform}:${env.USER ?? env.USERNAME ?? "user"}`;
+  const secret = env.RIMURU_VAULT_KEY ?? `rimuru-local:${process.platform}:${env.USER ?? env.USERNAME ?? process.env.USER ?? process.env.USERNAME ?? "user"}`;
   // Use scrypt for strong key derivation with a fixed salt for local stability
   return scryptSync(secret, "rimuru-salt-v1", 32);
 }
