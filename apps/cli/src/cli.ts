@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as readline from "node:readline/promises";
+import * as net from "node:net";
+import chalk from "chalk";
 import { 
   FlowBus, 
   JsonChronicle, 
@@ -220,30 +222,194 @@ async function chat(args: readonly string[]): Promise<void> {
   process.stdout.write(`${result.response.content}\n`);
 }
 
+async function isPortInUse(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const client = net.connect({ port, host: "127.0.0.1" }, () => {
+      client.end();
+      resolve(true);
+    });
+    client.on("error", () => {
+      resolve(false);
+    });
+  });
+}
+
+async function checkOllamaReachable(baseUrl = "http://127.0.0.1:11434"): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch(`${baseUrl}/api/tags`, { signal: controller.signal });
+    clearTimeout(id);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function checkWorkspaceWriteable(workspace: string): Promise<boolean> {
+  try {
+    const testFile = join(workspace, ".rimuru", ".write-test");
+    await mkdir(dirname(testFile), { recursive: true });
+    await writeFile(testFile, "test", "utf8");
+    const content = await readFile(testFile, "utf8");
+    await unlink(testFile);
+    return content === "test";
+  } catch {
+    return false;
+  }
+}
+
 async function doctor(): Promise<void> {
-  const config = await loadRuntimeConfig({ workspace: process.cwd() });
+  const workspace = process.cwd();
+  const config = await loadRuntimeConfig({ workspace });
   const json = process.argv.includes("--json");
-  const diagnostics = validateRuntimeConfig(config);
+  const fix = process.argv.includes("--fix");
+
+  const diagnostics = [...validateRuntimeConfig(config)];
+
+  // Check filesystem writeability
+  let fsStatus = "OK";
+  const writeable = await checkWorkspaceWriteable(workspace);
+  if (!writeable) {
+    fsStatus = "ERROR (No write access to .rimuru)";
+    diagnostics.push({
+      level: "error",
+      code: "FS_WRITE_ERROR",
+      message: "Workspace .rimuru directory is not writeable. Check file permissions."
+    });
+  }
+
+  // Check API keys or Ollama connection
+  let providerStatus = "OK";
+  if (config.provider === "ollama") {
+    const reachable = await checkOllamaReachable(config.baseUrl);
+    if (!reachable) {
+      providerStatus = `OFFLINE (Cannot connect to Ollama at ${config.baseUrl ?? "http://127.0.0.1:11434"})`;
+      diagnostics.push({
+        level: "warning",
+        code: "OLLAMA_OFFLINE",
+        message: `Ollama local daemon is not reachable at ${config.baseUrl ?? "http://127.0.0.1:11434"}. Make sure it is running.`
+      });
+    }
+  } else if (config.provider !== "mock") {
+    let keyExists = false;
+    try {
+      const vaultKey = await getVaultSecret(workspace, "RIMURU_API_KEY");
+      if (vaultKey) keyExists = true;
+    } catch {}
+    if (!keyExists && process.env.RIMURU_API_KEY) keyExists = true;
+    
+    if (!keyExists) {
+      providerStatus = "MISSING_API_KEY";
+      diagnostics.push({
+        level: "error",
+        code: "MISSING_API_KEY",
+        message: `API Key for ${config.provider} is missing. Set RIMURU_API_KEY in your environment or Vault.`
+      });
+    }
+  }
+
+  // Check Gateway Port availability
+  let portStatus = "FREE";
+  const portInUse = await isPortInUse(config.gatewayPort);
+  if (portInUse) {
+    portStatus = "IN_USE";
+    diagnostics.push({
+      level: "warning",
+      code: "PORT_OCCUPIED",
+      message: `Gateway port ${config.gatewayPort} is occupied. Verify if another instance is running.`
+    });
+  }
+
+  if (fix) {
+    const fixedItems: string[] = [];
+    
+    // 1. Create missing folders
+    const subDirs = ["sessions", "traces", "plugins", "rollbacks", "canvas", "rituals", "service"];
+    for (const name of subDirs) {
+      const dirPath = join(workspace, ".rimuru", name);
+      if (!existsSync(dirPath)) {
+        await mkdir(dirPath, { recursive: true });
+        fixedItems.push(`Created directory .rimuru/${name}`);
+      }
+    }
+
+    // 2. Install systemd user service if missing (and platform is linux)
+    if (process.platform === "linux") {
+      const serviceFile = join(workspace, ".rimuru", "service", "rimuru.service");
+      if (!existsSync(serviceFile)) {
+        try {
+          await writeSystemdUserService({ workspace });
+          fixedItems.push("Generated systemd user service at .rimuru/service/rimuru.service");
+        } catch (err: any) {
+          diagnostics.push({
+            level: "error",
+            code: "DAEMON_FIX_FAILED",
+            message: `Failed to generate systemd service: ${err.message}`
+          });
+        }
+      }
+    }
+
+    if (json) {
+      process.stdout.write(JSON.stringify({ repaired: fixedItems, diagnostics }, null, 2) + "\n");
+      return;
+    }
+
+    process.stdout.write(chalk.bgGreen.black(" RIMURU REPAIRED ") + "\n\n");
+    if (fixedItems.length === 0) {
+      process.stdout.write("No issues needed repairing.\n");
+    } else {
+      for (const item of fixedItems) {
+        process.stdout.write(`- ${chalk.green(item)}\n`);
+      }
+    }
+    process.stdout.write("\nRe-run without --fix to check active status.\n");
+    return;
+  }
+
   const checks: readonly (readonly [string, string])[] = [
     ["node", process.version],
     ["platform", process.platform],
-    ["workspace", process.cwd()],
-    ["provider", config.provider],
+    ["workspace", workspace],
+    ["filesystem", fsStatus],
+    ["provider", `${config.provider} (${providerStatus})`],
     ["model", config.model],
+    ["gateway", `port ${config.gatewayPort} (${portStatus})`],
     ["session", config.sessionId],
     ["memory", config.memoryDir],
     ["risks", config.allowedRisks.join(",")],
     ["sandbox", config.sandboxMode]
   ];
+
   if (json) {
     process.stdout.write(`${JSON.stringify({ ...Object.fromEntries(checks), diagnostics }, null, 2)}\n`);
     return;
   }
 
+  process.stdout.write(chalk.bgCyan.black(" RIMURU DIAGNOSTICS ") + "\n\n");
   for (const [name, value] of checks) {
-    process.stdout.write(`${name.padEnd(10)} ${value}\n`);
+    let coloredVal = value;
+    if (value.includes("ERROR") || value.includes("OFFLINE") || value.includes("MISSING")) {
+      coloredVal = chalk.red(value);
+    } else if (value === "OK" || value === "FREE") {
+      coloredVal = chalk.green(value);
+    }
+    process.stdout.write(`${chalk.bold(name.padEnd(12))} ${coloredVal}\n`);
   }
-  for (const diagnostic of diagnostics) process.stdout.write(`${diagnostic.level.padEnd(10)} ${diagnostic.code} ${diagnostic.message}\n`);
+
+  process.stdout.write("\n" + chalk.bold("DIAGNOSTIC MESSAGES:") + "\n");
+  const errors = diagnostics.filter(d => d.level === "error");
+  const warnings = diagnostics.filter(d => d.level === "warning");
+
+  if (diagnostics.length === 0) {
+    process.stdout.write(chalk.green("No issues found. Your Sovereign assistant workspace is healthy.\n"));
+  } else {
+    for (const d of diagnostics) {
+      const level = d.level === "error" ? chalk.bgRed.black(" ERROR ") : chalk.bgYellow.black(" WARN  ");
+      process.stdout.write(`${level} [${d.code}] ${d.message}\n`);
+    }
+  }
 }
 
 async function init(): Promise<void> {
