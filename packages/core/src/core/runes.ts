@@ -7,15 +7,18 @@ export interface RuneRegistryOptions {
   readonly policy?: PermissionPolicy;
   readonly emit?: (event: Flow) => void;
   readonly clock?: () => Date;
+  readonly flowBus?: any;
 }
 
 export class RuneRegistry {
+  readonly flowBus?: any;
   readonly #runes = new Map<string, Rune>();
   readonly #policy: PermissionPolicy | undefined;
   readonly #emit: ((event: Flow) => void) | undefined;
   readonly #clock: () => Date;
 
   constructor(options: RuneRegistryOptions = {}) {
+    this.flowBus = options.flowBus;
     this.#policy = options.policy;
     this.#emit = options.emit;
     this.#clock = options.clock ?? (() => new Date());
