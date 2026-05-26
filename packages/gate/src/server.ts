@@ -11,6 +11,8 @@ import {
   normalizeLocalCircleMessage, 
   getCircleAdapter, 
   registerCircleAdapter,
+  verifySlackSignature,
+  verifyDiscordSignature,
   WHATSAPP_ADAPTER,
   type CircleMessage,
 
@@ -92,6 +94,7 @@ export async function createGateHttpServer(options: GateServerOptions): Promise<
 
   const server = createServer(async (request, response) => {
     try {
+      (request as any).approvalBroker = approvalBroker;
       if (request.method === "OPTIONS") {
         sendEmpty(response, request, 204, options.corsOrigins);
         return;
@@ -176,7 +179,10 @@ async function dispatch(ctx: RouteContext): Promise<boolean> {
 
   // POST Actions
   if (method === "POST") {
+    if (["/runes/call/stream", "/tools/call/stream"].includes(url.pathname)) return handleRuneCallStream(ctx);
     if (["/runes/call", "/tools/call"].includes(url.pathname)) return handleRuneCall(ctx);
+    if (url.pathname === "/runes/register") return handleRuneRegister(ctx);
+    if (url.pathname === "/runes/deregister") return handleRuneDeregister(ctx);
     if (url.pathname === "/chat") return handleChat(ctx);
     if (url.pathname === "/chat/stream") return handleChatStream(ctx);
     if (url.pathname === "/agent") return handleAgent(ctx);
@@ -269,6 +275,76 @@ async function handleRuneCall(ctx: RouteContext) {
   sendJson(response, request, 200, { output }, options.corsOrigins);
   return true;
 }
+
+async function handleRuneCallStream(ctx: RouteContext) {
+  const { request, response, runtime, options } = ctx;
+  const body = await readJson(request);
+  const name = readString(body, "name");
+  const input = readOptional(body, "input") ?? {};
+  const sessionId = readOptionalString(body, "sessionId") ?? options.config.sessionId;
+
+  response.writeHead(200, {
+    ...corsHeaders(request, options.corsOrigins),
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive"
+  });
+
+  try {
+    const context = {
+      workspace: options.workspace,
+      sessionId,
+      audit: true
+    };
+    for await (const chunk of runtime.runes.invokeStream(name, input, context)) {
+      response.write(`data: ${JSON.stringify({ type: "chunk", chunk })}\n\n`);
+    }
+    response.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
+    response.end();
+  } catch (error: any) {
+    response.write(`data: ${JSON.stringify({ type: "error", error: error.message })}\n\n`);
+    response.end();
+  }
+  return true;
+}
+
+async function handleRuneRegister(ctx: RouteContext) {
+  const { request, response, runtime, options } = ctx;
+  const body = await readJson(request);
+  const name = readString(body, "name");
+  const description = readString(body, "description");
+  const risk = readString(body, "risk") as any;
+  const code = readString(body, "code");
+  const inputSchema = readOptional(body, "inputSchema") as any;
+  const outputSchema = readOptional(body, "outputSchema") as any;
+
+  const dynamicRune = {
+    name,
+    description,
+    risk,
+    inputSchema,
+    outputSchema,
+    async invoke(input: any, context: any) {
+      const { executeDynamicRune } = await import("@rimuru/core");
+      return executeDynamicRune(code, input);
+    }
+  };
+
+  runtime.runes.register(dynamicRune);
+  sendJson(response, request, 200, { registered: name }, options.corsOrigins);
+  return true;
+}
+
+async function handleRuneDeregister(ctx: RouteContext) {
+  const { request, response, runtime, options } = ctx;
+  const body = await readJson(request);
+  const name = readString(body, "name");
+
+  runtime.runes.deregister(name);
+  sendJson(response, request, 200, { deregistered: name }, options.corsOrigins);
+  return true;
+}
+
 
 async function handleChat(ctx: RouteContext) {
   const { request, response, options, flowBus } = ctx;
@@ -428,7 +504,9 @@ async function handleApprovalDecision(ctx: RouteContext, allowed: boolean) {
   const broker = (request as any).approvalBroker;
   if (!broker) throw new Error("Approval broker not available");
   const reason = allowed ? (readOptionalString(body, "scope") === "session" ? "approved for session" : "approved once") : (readOptionalString(body, "reason") ?? "denied by gate");
-  sendJson(response, request, 200, { result: broker.decide(parts[1], { allowed, reason }) }, options.corsOrigins);
+  const summary = broker.decide(parts[1], { allowed, reason });
+  const key = allowed ? "approved" : "denied";
+  sendJson(response, request, 200, { [key]: summary }, options.corsOrigins);
   return true;
 }
 
@@ -528,14 +606,42 @@ async function handleCircleWebhook(ctx: RouteContext) {
   const { request, response, options, parts, flowBus } = ctx;
   const body = await readJson(request);
   const circle = circleByName(options.config, parts[1]) ?? { name: parts[1], kind: "webhook" as const, enabled: true };
+  const from = readOptionalString(body, "from") ?? "webhook";
+  const text = readPrompt(body);
+  const sessionId = readOptionalString(body, "sessionId") ?? (circle as any).sessionId ?? `webhook-${circle.name}-${from}`;
+
   const message = circle.name === "local" ? normalizeLocalCircleMessage(body, options.config.sessionId) : { 
     circle: circle.name, 
-    from: readOptionalString(body, "from") ?? "webhook", 
-    text: readPrompt(body), 
-    sessionId: readOptionalString(body, "sessionId") ?? (circle as any).sessionId ?? options.config.sessionId, 
+    from, 
+    text, 
+    sessionId, 
     raw: body 
   };
-  sendJson(response, request, 200, await handleCircleMessage(options, flowBus, message, (circle as any).allowFrom ?? (circle.kind === "local" ? ["*"] : [])), options.corsOrigins);
+
+  if (circle.name === "local") {
+    const result = await handleCircleMessage(options, flowBus, message, ["*"]);
+    sendJson(response, request, 200, result, options.corsOrigins);
+    return true;
+  }
+
+  sendJson(response, request, 202, { deferred: true, circle: circle.name, sessionId }, options.corsOrigins);
+
+  Promise.resolve().then(async () => {
+    try {
+      const result = await handleCircleMessage(options, flowBus, message, (circle as any).allowFrom ?? []);
+      const callbackUrl = readOptionalString(body, "callbackUrl") ?? (circle as any).callbackUrl;
+      if (callbackUrl && "response" in result) {
+        await fetch(callbackUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ event: "circle.completed", circle: circle.name, from: message.from, sessionId, response: result.response })
+        }).catch(err => console.error(`[gate] Failed to post webhook callback to ${callbackUrl}:`, err));
+      }
+    } catch (err) {
+      console.error(`[gate] Error during deferred custom webhook message processing for ${circle.name}:`, err);
+    }
+  });
+
   return true;
 }
 
@@ -547,6 +653,36 @@ async function handleCircleAdapter(ctx: RouteContext) {
   if (!adapter) throw new Error(`No adapter for kind: ${circle.kind}`);
 
   const body = await readJson(request);
+
+  // Webhook Cryptographic Verification
+  if (circle.kind === "slack") {
+    const signingSecret = (circle as any).signingSecret ?? ((circle as any).secret ?? process.env.SLACK_SIGNING_SECRET);
+    if (signingSecret) {
+      const timestamp = String(request.headers["x-slack-request-timestamp"] ?? "");
+      const signature = String(request.headers["x-slack-signature"] ?? "");
+      const rawBody = (request as any).rawBody ?? "";
+      if (!verifySlackSignature(signingSecret, timestamp, rawBody, signature)) {
+        sendJson(response, request, 401, { error: "Unauthorized", message: "Invalid Slack signature" }, options.corsOrigins);
+        return true;
+      }
+    } else {
+      console.warn(`[gate] Warning: No Slack signing secret configured for circle ${circle.name}. Skipping signature verification.`);
+    }
+  } else if (circle.kind === "discord") {
+    const publicKey = (circle as any).publicKey ?? ((circle as any).secret ?? process.env.DISCORD_PUBLIC_KEY);
+    if (publicKey) {
+      const timestamp = String(request.headers["x-signature-timestamp"] ?? "");
+      const signature = String(request.headers["x-signature-ed25519"] ?? "");
+      const rawBody = (request as any).rawBody ?? "";
+      if (!verifyDiscordSignature(publicKey, timestamp, rawBody, signature)) {
+        sendJson(response, request, 401, { error: "Unauthorized", message: "Invalid Discord signature" }, options.corsOrigins);
+        return true;
+      }
+    } else {
+      console.warn(`[gate] Warning: No Discord public key configured for circle ${circle.name}. Skipping signature verification.`);
+    }
+  }
+
   const message = adapter.normalize(circle, body);
   if (!message) {
     sendJson(response, request, 200, { ignored: true }, options.corsOrigins);
@@ -561,13 +697,42 @@ async function handleCircleAdapter(ctx: RouteContext) {
     return true;
   }
 
-  const result = await handleCircleMessage(options, flowBus, message as CircleMessage, (circle as any).allowFrom ?? []);
-  if ("response" in result && adapter.send) {
-    const chatId = circle.kind === "telegram" ? readTelegramChatId(body) : undefined;
-    if (chatId) await adapter.send(circle, chatId, result.response.content);
-  }
+  const circleMessage = message as CircleMessage;
 
-  sendJson(response, request, 200, result, options.corsOrigins);
+  // Acknowledge immediately and process asynchronously
+  sendJson(response, request, 202, { deferred: true, circle: circle.name, sessionId: circleMessage.sessionId }, options.corsOrigins);
+
+  Promise.resolve().then(async () => {
+    try {
+      const result = await handleCircleMessage(options, flowBus, circleMessage, (circle as any).allowFrom ?? []);
+      if (result.paired && "response" in result && adapter.send) {
+        let chatId: string | undefined;
+        if (circle.kind === "telegram") {
+          chatId = readTelegramChatId(body);
+        } else if (circle.kind === "slack") {
+          chatId = (body as any).event?.channel;
+        } else if (circle.kind === "discord") {
+          chatId = (body as any).channel_id ?? (body as any).message?.channel_id;
+        }
+        if (chatId) {
+          await adapter.send(circle, chatId, result.response.content);
+        } else {
+          console.warn(`[gate] Could not resolve chatId to send response for circle ${circle.name}`);
+        }
+      } else if (!result.paired && adapter.send) {
+        let chatId: string | undefined;
+        if (circle.kind === "telegram") chatId = readTelegramChatId(body);
+        else if (circle.kind === "slack") chatId = (body as any).event?.channel;
+        else if (circle.kind === "discord") chatId = (body as any).channel_id ?? (body as any).message?.channel_id;
+        if (chatId) {
+          await adapter.send(circle, chatId, result.message);
+        }
+      }
+    } catch (err) {
+      console.error(`[gate] Error during deferred circle message processing for ${circle.name}:`, err);
+    }
+  });
+
   return true;
 }
 
@@ -721,8 +886,13 @@ async function readJson(request: IncomingMessage): Promise<Record<string, unknow
     if (size > 1024 * 1024) throw new Error("Body too large");
     chunks.push(buffer);
   }
-  if (chunks.length === 0) return {};
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  if (chunks.length === 0) {
+    (request as any).rawBody = "";
+    return {};
+  }
+  const rawBody = Buffer.concat(chunks).toString("utf8");
+  (request as any).rawBody = rawBody;
+  return JSON.parse(rawBody);
 }
 
 function readPrompt(body: Record<string, unknown>): string {
