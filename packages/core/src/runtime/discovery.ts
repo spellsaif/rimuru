@@ -1,10 +1,10 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { Rune, RuneRisk } from "../core/types.js";
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 /**
  * Persona management.
@@ -76,7 +76,12 @@ function parseRuneMd(folderName: string, content: string, root: string): Rune | 
         return typeof input === "object" && input !== null ? String((input as any)[key] ?? "") : "";
       });
 
-      const { stdout, stderr } = await execAsync(cmd, { cwd: root });
+      const tokens = cmd.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
+      if (tokens.length === 0) throw new Error("Empty command");
+      const program = tokens[0]!.replace(/^"|"$/g, "");
+      const args = tokens.slice(1).map(arg => arg.replace(/^"|"$/g, ""));
+
+      const { stdout, stderr } = await execFileAsync(program, args, { cwd: root });
       return stdout || stderr;
     }
   };
