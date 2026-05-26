@@ -17,6 +17,7 @@ import { Sovereign } from "../core/sovereign.js";
 import { loadSoul, discoverWorkspaceRunes, discoverSandboxedRunes } from "./discovery.js";
 export { discoverSandboxedRunes };
 import { vesselsRunes } from "../runes/vessels-rune.js";
+import { webRunes } from "../runes/web.js";
 
 
 export interface RuntimePaths {
@@ -120,6 +121,7 @@ export async function createRuntimeRuneRegistry(options: {
   for (const workspaceRuneItem of workspaceRunes) registry.register(workspaceRuneItem);
   for (const gitRune of gitRunes) registry.register(gitRune);
   for (const vesselsRune of vesselsRunes) registry.register(vesselsRune);
+  for (const webRune of webRunes) registry.register(webRune);
   for (const memoryRune of semanticMemoryRunes(createSemanticMemory(resolve(options.workspace, ".rimuru")))) registry.register(memoryRune);
   for (const workspaceSkill of await discoverWorkspaceRunes(options.workspace)) registry.register(workspaceSkill);
   for (const sandboxedRune of await discoverSandboxedRunes(options.workspace)) registry.register(sandboxedRune);
