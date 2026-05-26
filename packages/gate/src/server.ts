@@ -92,6 +92,13 @@ export async function createGateHttpServer(options: GateServerOptions): Promise<
   const semanticMemory = createSemanticMemory(paths.rimuruDir);
   const status = getGateStatus(options.config, options.workspace);
 
+  let gatewayToken = process.env.RIMURU_GATEWAY_TOKEN || "";
+  if (!gatewayToken) {
+    try {
+      gatewayToken = await getVaultSecret(options.workspace, "RIMURU_GATEWAY_TOKEN");
+    } catch {}
+  }
+
   const server = createServer(async (request, response) => {
     try {
       (request as any).approvalBroker = approvalBroker;
@@ -102,6 +109,21 @@ export async function createGateHttpServer(options: GateServerOptions): Promise<
 
       const url = new URL(request.url ?? "/", "http://rimuru.local");
       const parts = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
+
+      // Verify authorization if a gateway token is configured and the route is not public/webhooks
+      const isPublicRoute = 
+        request.method === "OPTIONS" || 
+        (request.method === "GET" && (url.pathname === "/" || url.pathname === "/health" || url.pathname === "/room")) ||
+        (request.method === "POST" && parts[0] === "circles" && parts[1]);
+
+      if (gatewayToken && !isPublicRoute) {
+        const authHeader = request.headers["authorization"];
+        if (!authHeader || !authHeader.startsWith("Bearer ") || authHeader.slice(7).trim() !== gatewayToken.trim()) {
+          sendJson(response, request, 401, { error: "Unauthorized", message: "Missing or invalid gateway authorization token" }, options.corsOrigins);
+          return;
+        }
+      }
+
       const context: RouteContext = { request, response, url, parts, options, runtime, chronicle, semanticMemory, flowBus, status };
 
       // Dispatch to specific handlers
@@ -943,7 +965,12 @@ function sendJson(response: ServerResponse, request: IncomingMessage, status: nu
 
 function corsHeaders(request?: IncomingMessage, allowedOrigins?: readonly string[]): Record<string, string> {
   const origin = request?.headers.origin;
-  const isAllowed = !origin || origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:") || (allowedOrigins?.includes(origin) ?? false);
+  const isAllowed = !origin || 
+    origin.startsWith("http://localhost:") || 
+    origin.startsWith("http://127.0.0.1:") || 
+    origin === "http://localhost" || 
+    origin === "http://127.0.0.1" || 
+    (allowedOrigins?.includes(origin) ?? false);
   return { "Access-Control-Allow-Origin": isAllowed && origin ? origin : "null", "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS", "Access-Control-Allow-Headers": "Content-Type", "Vary": "Origin" };
 }
 
