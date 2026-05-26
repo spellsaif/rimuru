@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { assertCommandName } from "../security/workspace.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -84,7 +85,16 @@ export function parseUnifiedPatch(patch: string): readonly PatchFile[] {
 
 export async function applyUnifiedPatch(options: ApplyPatchOptions): Promise<PatchApplyResult> {
   const files = parseUnifiedPatch(options.patch);
-  const results: { path: string; changed: boolean; preview: string; rollbackPath?: string }[] = [];
+  
+  // 1. Calculate all patch contents in memory first to prevent partial/corrupted writes on failure
+  const prep: { 
+    file: PatchFile;
+    target: string;
+    before: string;
+    after: string;
+    changed: boolean;
+    isDeletion: boolean;
+  }[] = [];
 
   for (const file of files) {
     const target = options.resolvePath(file.newPath === "/dev/null" ? file.oldPath : file.newPath);
@@ -101,6 +111,13 @@ export async function applyUnifiedPatch(options: ApplyPatchOptions): Promise<Pat
     const isDeletion = file.newPath === "/dev/null";
     const after = isDeletion ? "" : applyPatchToText(before, file);
     const changed = before !== after;
+    prep.push({ file, target, before, after, changed, isDeletion });
+  }
+
+  // 2. Commit all changes to the filesystem safely
+  const results: { path: string; changed: boolean; preview: string; rollbackPath?: string }[] = [];
+
+  for (const { file, target, before, after, changed, isDeletion } of prep) {
     let rollbackPath: string | undefined;
 
     if (changed && !options.dryRun) {
@@ -116,7 +133,10 @@ export async function applyUnifiedPatch(options: ApplyPatchOptions): Promise<Pat
         await writeFile(target, after, "utf8");
         if (options.formatter && options.formatter.length > 0) {
           const [command, ...args] = options.formatter;
-          if (command) await execFileAsync(command, [...args, target], { cwd: options.workspace, maxBuffer: 1024 * 1024 });
+          if (command) {
+            assertCommandName(command);
+            await execFileAsync(command, [...args, target], { cwd: options.workspace, maxBuffer: 1024 * 1024 });
+          }
         }
       }
     }
