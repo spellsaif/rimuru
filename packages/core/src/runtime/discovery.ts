@@ -81,3 +81,47 @@ function parseRuneMd(folderName: string, content: string, root: string): Rune | 
     }
   };
 }
+
+import { executeDynamicRune } from "../security/sandbox-vm.js";
+
+/**
+ * Discovers sandboxed runes in .rimuru/runes/ workspace directory.
+ */
+export async function discoverSandboxedRunes(workspace: string): Promise<readonly Rune[]> {
+  const runes: Rune[] = [];
+  const runesDir = resolve(workspace, ".rimuru", "runes");
+  try {
+    const entries = await readdir(runesDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isFile() && entry.name.endsWith(".js")) {
+        const jsPath = join(runesDir, entry.name);
+        const nameWithoutExt = entry.name.slice(0, -3);
+        const jsonPath = join(runesDir, `${nameWithoutExt}.json`);
+
+        try {
+          const code = await readFile(jsPath, "utf8");
+          const jsonContent = await readFile(jsonPath, "utf8");
+          const config = JSON.parse(jsonContent);
+
+          const rune: Rune = {
+            name: config.name || `custom.${nameWithoutExt}`,
+            description: config.description || `Custom sandboxed tool: ${nameWithoutExt}`,
+            risk: (config.risk as RuneRisk) || "execute",
+            inputSchema: config.inputSchema,
+            outputSchema: config.outputSchema,
+            async invoke(input) {
+              return await executeDynamicRune(code, input);
+            }
+          };
+          runes.push(rune);
+        } catch (error) {
+          console.warn(`[discovery] Failed to load sandboxed Rune from ${entry.name}:`, error);
+        }
+      }
+    }
+  } catch {
+    // If the directory doesn't exist or is unreadable, skip
+  }
+  return runes;
+}
+
