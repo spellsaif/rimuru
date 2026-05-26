@@ -10,7 +10,8 @@ import {
   JsonTraceStore,
   Sovereign,
   createShard,
-  loadRuntimeConfig
+  loadRuntimeConfig,
+  writeSystemdUserService
 } from "@rimuru/core";
 import { setVaultSecret } from "@rimuru/vault";
 import { runInteractiveTui } from "./interactive.js";
@@ -161,6 +162,75 @@ export async function setupWorkspaceInteractive(options: Pick<SetupOptions, "wor
     }
   );
 
+  // --- CIRCLES & WEBHOOKS ONBOARDING ---
+  const setupCircles = await p.confirm({
+    message: "Would you like to configure external messaging channels (Circles)?",
+    initialValue: false
+  });
+
+  const circles: CircleConfig[] = [{ name: "local", kind: "local", enabled: true }];
+  if (setupCircles && !p.isCancel(setupCircles)) {
+    const circleKind = await p.select({
+      message: "Which Circle platform would you like to configure?",
+      options: [
+        { label: "Slack", value: "slack" },
+        { label: "Discord", value: "discord" },
+        { label: "Telegram", value: "telegram" }
+      ]
+    });
+
+    if (circleKind && !p.isCancel(circleKind)) {
+      const circleName = await p.text({
+        message: "Enter a name for this Circle channel:",
+        initialValue: `my-${circleKind}`
+      });
+
+      if (circleName && !p.isCancel(circleName)) {
+        if (circleKind === "slack") {
+          const token = await p.password({ message: "Slack Bot Token (xoxb-...):" });
+          const signingSecret = await p.password({ message: "Slack Signing Secret:" });
+          if (token && !p.isCancel(token) && signingSecret && !p.isCancel(signingSecret)) {
+            circles.push({
+              name: String(circleName),
+              kind: "slack",
+              enabled: true,
+              token: String(token),
+              signingSecret: String(signingSecret)
+            });
+          }
+        } else if (circleKind === "discord") {
+          const token = await p.password({ message: "Discord Bot Token:" });
+          const publicKey = await p.password({ message: "Discord Public Key (for webhook signature verification):" });
+          if (token && !p.isCancel(token) && publicKey && !p.isCancel(publicKey)) {
+            circles.push({
+              name: String(circleName),
+              kind: "discord",
+              enabled: true,
+              token: String(token),
+              publicKey: String(publicKey)
+            });
+          }
+        } else if (circleKind === "telegram") {
+          const token = await p.password({ message: "Telegram Bot Token:" });
+          if (token && !p.isCancel(token)) {
+            circles.push({
+              name: String(circleName),
+              kind: "telegram",
+              enabled: true,
+              token: String(token)
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // --- BACKGROUND DAEMON (SYSTEMD USER SERVICE) ONBOARDING ---
+  const installDaemon = await p.confirm({
+    message: "Would you like to install Rimuru as a background autostart daemon (systemd user service)?",
+    initialValue: false
+  });
+
   const spinner = p.spinner();
   spinner.start("Forging workspace...");
 
@@ -170,6 +240,7 @@ export async function setupWorkspaceInteractive(options: Pick<SetupOptions, "wor
     model: project.model as string,
     vows: project.vows as string[],
     barrier: project.barrier as any,
+    circles,
     force: true
   });
 
@@ -179,6 +250,14 @@ export async function setupWorkspaceInteractive(options: Pick<SetupOptions, "wor
     const envKey = provider === "openai-compatible" ? "RIMURU_API_KEY" : `RIMURU_${provider.toUpperCase().replace("-", "_")}_KEY`;
     await setVaultSecret(options.workspace, "RIMURU_API_KEY", apiKey);
     await setVaultSecret(options.workspace, envKey, apiKey);
+  }
+
+  if (installDaemon && !p.isCancel(installDaemon)) {
+    try {
+      await writeSystemdUserService({ workspace: options.workspace });
+    } catch (err: any) {
+      p.log.warn(`Could not install systemd service: ${err.message}`);
+    }
   }
 
   spinner.stop("Workspace forged.");
