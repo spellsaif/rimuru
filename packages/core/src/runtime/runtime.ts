@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { createHash } from "node:crypto";
 import { AgentLoop, type AgentRunResult } from "../agent/agent.js";
 import type { RuntimeConfig } from "../config/runtime-config.js";
 import { JsonChronicle } from "../core/chronicle.js";
@@ -70,10 +71,13 @@ export interface AgentTurnOptions {
 }
 
 const runtimeCache = new Map<string, RuntimeServices>();
+const MAX_CACHE_SIZE = 50;
 
 export async function createRuntime(options: CreateRuntimeOptions): Promise<RuntimeServices> {
-  const cacheKey = `${options.workspace}:${options.config.vesselId}:${options.approvals ?? false}:${options.systemPrompt ?? ""}`;
-  const cached = runtimeCache.get(cacheKey);
+  const configHash = createHash("sha256")
+    .update(`${options.workspace}:${options.approvals ?? false}:${options.systemPrompt ?? ""}:${JSON.stringify(options.config)}`)
+    .digest("hex");
+  const cached = runtimeCache.get(configHash);
   if (cached) return cached;
 
   const paths = runtimePaths(options.config, options.workspace);
@@ -96,7 +100,13 @@ export async function createRuntime(options: CreateRuntimeOptions): Promise<Runt
     sovereign: new Sovereign({ shard: createShard(options.config), chronicle, flowBus, ...(soul ? { systemPrompt: soul } : {}) })
   };
 
-  runtimeCache.set(cacheKey, runtime);
+  if (runtimeCache.size >= MAX_CACHE_SIZE) {
+    const oldestKey = runtimeCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      runtimeCache.delete(oldestKey);
+    }
+  }
+  runtimeCache.set(configHash, runtime);
   return runtime;
 }
 
