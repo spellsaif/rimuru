@@ -1,11 +1,11 @@
 export { FlowBus } from "./core/events.js";
 export { appendAuditEvent, auditLogPath, listAuditEvents } from "./core/audit.js";
 export { createCanvasArtifact, listCanvasArtifacts, readCanvasArtifact } from "./canvas/canvas.js";
-export { circleByName, getCircleAdapter, listCircles, normalizeLocalCircleMessage, registerCircleAdapter } from "./circles/circles.js";
+export { circleByName, getCircleAdapter, listCircles, normalizeLocalCircleMessage, registerCircleAdapter, verifySlackSignature, verifyDiscordSignature, TELEGRAM_ADAPTER, SLACK_ADAPTER, DISCORD_ADAPTER } from "./circles/circles.js";
 export { WHATSAPP_ADAPTER } from "./circles/whatsapp.js";
 
 export { JsonChronicle, MemoryChronicle } from "./core/chronicle.js";
-export { ApprovalPermissionPolicy, readOnlyPolicy, StaticPermissionPolicy, trustedLocalPolicy } from "./core/permissions.js";
+export { ApprovalPermissionPolicy, ConsensusPermissionPolicy, readOnlyPolicy, StaticPermissionPolicy, trustedLocalPolicy } from "./core/permissions.js";
 export { JsonTraceStore } from "./core/trace.js";
 export { AgentLoop } from "./agent/agent.js";
 export { RuneRegistry, workspaceRune } from "./core/runes.js";
@@ -21,8 +21,10 @@ export { createShard } from "./providers/factory.js";
 export { OpenAICompatibleShard } from "./providers/openai-compatible.js";
 export { AnthropicShard } from "./providers/anthropic.js";
 export { GeminiShard } from "./providers/gemini.js";
+export { MockShard } from "./providers/mock.js";
 export { gitDiffRune, gitRunes, gitStatusRune, gitSummaryRune } from "./runes/git.js";
 export { applyPatchRune, editFileRune, readFileRune, searchRune, shellRune, workspaceRunes } from "./runes/workspace.js";
+export { sendMessageRune } from "./runes/circle.js";
 export { applyPatchToText, applyUnifiedPatch, parseUnifiedPatch } from "./edit/patch.js";
 export { planObjective } from "./planner/planner.js";
 export { applyRollback, inspectRollback, listRollbacks } from "./rewind/rollback.js";
@@ -43,6 +45,7 @@ export { serveMcpStdio } from "./mcp/server.js";
 export { redactSecrets } from "./security/redact.js";
 export { assertCommandName, resolveWorkspacePath } from "./security/workspace.js";
 export { runSandboxedCommand, sandboxModeFromEnv } from "./security/sandbox.js";
+export { executeDynamicRune } from "./security/sandbox-vm.js";
 // Dashboard logic moved to @rimuru/cli
 
 export type { CircleConfig, ProviderAttempt, ProviderKind, RuntimeConfig, VesselConfig } from "./config/runtime-config.js";
