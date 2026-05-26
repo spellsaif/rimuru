@@ -12,6 +12,7 @@ import { registerPlugins } from "../plugins/manifest.js";
 import { createShard } from "../providers/factory.js";
 import { gitRunes } from "../runes/git.js";
 import { workspaceRunes } from "../runes/workspace.js";
+import { sendMessageRune } from "../runes/circle.js";
 import { Sovereign } from "../core/sovereign.js";
 import { loadSoul, discoverWorkspaceRunes } from "./discovery.js";
 
@@ -110,6 +111,7 @@ export async function createRuntimeRuneRegistry(options: {
     emit: (event) => options.flowBus?.emit(event)
   });
   registry.register(workspaceRune);
+  registry.register(sendMessageRune);
   for (const workspaceRuneItem of workspaceRunes) registry.register(workspaceRuneItem);
   for (const gitRune of gitRunes) registry.register(gitRune);
   for (const memoryRune of semanticMemoryRunes(createSemanticMemory(resolve(options.workspace, ".rimuru")))) registry.register(memoryRune);
