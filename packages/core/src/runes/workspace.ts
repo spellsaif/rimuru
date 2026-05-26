@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, readdir } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
@@ -176,6 +176,54 @@ export const deleteFileRune: Rune<{ readonly path: string }, { readonly path: st
   }
 };
 
+async function buildFileTreeString(dir: string, currentDepth: number, maxDepth: number): Promise<string> {
+  if (currentDepth > maxDepth) return "";
+  const entries = await readdir(dir, { withFileTypes: true });
+  const filtered = entries.filter(e => {
+    return e.name !== "node_modules" && e.name !== "dist" && e.name !== ".git" && e.name !== ".rimuru";
+  }).sort((a, b) => {
+    if (a.isDirectory() && !b.isDirectory()) return -1;
+    if (!a.isDirectory() && b.isDirectory()) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  let result = "";
+  for (let index = 0; index < filtered.length; index++) {
+    const entry = filtered[index]!;
+    const isLast = index === filtered.length - 1;
+    const prefix = isLast ? "└── " : "├── ";
+    const childPrefix = isLast ? "    " : "│   ";
+    
+    result += `${prefix}${entry.name}${entry.isDirectory() ? "/" : ""}\n`;
+    if (entry.isDirectory() && currentDepth < maxDepth) {
+      const subTree = await buildFileTreeString(join(dir, entry.name), currentDepth + 1, maxDepth);
+      if (subTree) {
+        result += subTree.split("\n")
+          .filter(line => line.length > 0)
+          .map(line => `${childPrefix}${line}`)
+          .join("\n") + "\n";
+      }
+    }
+  }
+  return result;
+}
+
+export const fileTreeRune: Rune<{ readonly maxDepth?: number }, { readonly tree: string }> = {
+  name: "workspace.fileTree",
+  description: "Visualizes the workspace files and directories recursively up to a specified depth.",
+  risk: "read",
+  inputSchema: {
+    type: "object",
+    properties: {
+      maxDepth: { type: "number" }
+    }
+  },
+  async invoke(input, context) {
+    const maxDepth = input.maxDepth ?? 3;
+    const tree = await buildFileTreeString(context.workspace, 1, maxDepth);
+    return { tree: tree || "Empty workspace\n" };
+  }
+};
 
 export const workspaceRunes = [
   readFileRune, 
@@ -186,7 +234,8 @@ export const workspaceRunes = [
   editFileRune, 
   writeFileRune, 
   deleteFileRune,
-  applyPatchRune
+  applyPatchRune,
+  fileTreeRune
 ] as const;
 
 
