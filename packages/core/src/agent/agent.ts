@@ -57,8 +57,20 @@ export class AgentLoop {
         this.options.flowBus?.emit({ type: "thought.emitted", thought: thoughtProcess.thought, at: new Date() });
       }
       
-      if (!thoughtProcess || thoughtProcess.type === "finish") {
+      if (!thoughtProcess) {
+        const errorMsg = "Format Error: Your response did not follow the ReAct loop format. You must start with 'Thought: <reasoning>', followed by 'Action: <rune_name_or_finish>', and then 'Input: <json_input>' on the next lines. Please correct your formatting.";
+        observations.push({
+          step,
+          thought: "Formatting parse failed",
+          error: errorMsg
+        });
+        if (onText) {
+          onText(`\x1b[31mParse Error: Invalid ReAct response format.\x1b[0m\n`);
+        }
+        continue;
+      }
 
+      if (thoughtProcess.type === "finish") {
         currentStatus = "finished";
         break;
       }
