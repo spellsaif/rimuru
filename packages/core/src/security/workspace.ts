@@ -1,8 +1,13 @@
-import { relative, resolve, sep } from "node:path";
+import { relative, resolve, sep, parse } from "node:path";
 
 export function resolveWorkspacePath(workspace: string, path: string): string {
   const root = resolve(workspace);
   const resolved = resolve(root, path);
+
+  if (parse(root).root.toLowerCase() !== parse(resolved).root.toLowerCase()) {
+    throw new Error(`Path escapes workspace (drive boundary): ${path}`);
+  }
+
   const rel = relative(root, resolved);
   if (rel === "" || rel.startsWith("..") || rel.includes(`..${sep}`)) {
     throw new Error(`Path escapes workspace: ${path}`);
