@@ -7,7 +7,7 @@
     "rimuru": "./dist/cli.js"
   },
   "scripts": {
-    "prebuild": "mkdir -p public && cp -rv ../web/out/* ./public/",
+    "prebuild": "node scripts/prebuild.js",
     "build": "pnpm prebuild && tsup",
     "dev": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit"
@@ -16,6 +16,7 @@
     "@clack/core": "^1.2.0",
     "@clack/prompts": "^1.2.0",
     "@inquirer/prompts": "^8.4.2",
+    "@opentui/core": "^0.2.15",
     "@rimuru/core": "workspace:*",
     "@rimuru/gate": "workspace:*",
     "@rimuru/vault": "workspace:*",
@@ -29,6 +30,7 @@
     "whatsapp-web.js": "^1.34.7"
   },
   "devDependencies": {
+    "@rimuru/web": "workspace:*",
     "tsup": "^8.5.1",
     "tsx": "latest",
     "typescript": "latest"
