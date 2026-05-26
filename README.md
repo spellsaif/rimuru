@@ -1,42 +1,48 @@
-# Rimuru: The Sovereign AI Runtime — The Definitive Technical Manifesto
+# 🌌 Rimuru: The Sovereign, Local-First AI Orchestration Kernel
 
 > **"Privacy is a human right. Sovereignty is a technical choice."**
 
-Rimuru is a high-performance, local-first AI assistant runtime designed for maximum **Sovereignty, Auditability, and Security**. It operates as a modular orchestration kernel that lives entirely within your local workspace, ensuring your data, secrets, and communications never leave your physical control.
+```ascii
+     ____  ____ __  ________  ____  __ 
+    / __ \/  _/  |/  / __ / / / / / / 
+   / /_/ // // /|_/ / /_/ / / / / / /  
+  / _, _// // /  / / _, _/ /_/ /_/ /   
+  /_/ |_/___/_/  /_/_/ |_|\____/\____/ 
+                                       
+```
+
+Welcome to **Rimuru**, a secure, local-first AI assistant runtime and orchestration kernel engineered for maximum **Sovereignty, Auditability, and Security**. 
+
+Unlike modern AI solutions that force you into *digital feudalism*—streaming your source code, private thoughts, and sensitive credentials to remote cloud servers—Rimuru brings the intelligence to your data. It runs entirely on your local machine, isolates third-party code in secure sandboxes, and verifies every tool execution against a decentralized, consensus-based permission system.
 
 ---
 
-## 🏛️ I. The Sovereign Manifesto: Why We Built This
+## 🏛️ I. The Philosophy of Rimuru
 
-### The Rise of Digital Feudalism
-In the modern era, AI has become the most powerful tool for human productivity. However, this power has come at a steep cost. Most modern AI assistants are built on a "Cloud-First" model, which we call **Digital Feudalism**. In this model:
-1. **You are a Tenant**: You do not own the tools you use; you lease them.
-2. **Your Data is the Rent**: To get utility, you must stream your most sensitive code, thoughts, and private messages to remote servers.
-3. **The Black Box**: You have no visibility into how your data is processed, stored, or used for training.
+### 1. Zero-Trust Autonomous Sovereignty
+The AI model is a guest in your workspace. Rimuru enforces a strict isolation boundary between the model's desires and your physical operating system. Every filesystem read/write, terminal command, or network query must be explicitly permitted by user-defined constraints.
 
-### The Sovereign Alternative
-Rimuru is a rejection of this model. It is built on the belief that **Individual Sovereignty** is the only safe way to interact with artificial intelligence. By bringing the AI to the data—rather than the data to the AI—Rimuru restores the traditional relationship between a craftsman and their tools.
+### 2. Radical Observability (The Flow)
+Rimuru records every thought, planning step, execution command, and tool observation into an immutable event stream called the **Flow**. Trust, but verify: the Flow provides a perfect, tamper-proof audit trail of everything the AI does in your workspace.
 
-#### The Three Pillars of Sovereignty:
-- **Local-First Execution**: The "Brain" of the system is on your desk, not in a data center. All memory, secret storage (Vault), and tool execution occur locally.
-- **Hardened Boundaries**: The AI is a guest in your workspace. It can only see what you allow and only touch what you approve via the **Vow** system.
-- **Absolute Auditability**: Trust but verify. Rimuru records every thought, action, and tool output in an immutable event stream (**Flow**), providing a perfect audit trail.
+### 3. Local-First Memory & Vault
+Your conversation histories (**Chronicles**) and semantic databases are indexed and queried locally. All API tokens and environment secrets are encrypted on-disk using AES-256-GCM via the **Vault**, remaining completely blind to the LLM shard.
+
+### 4. Event-Driven Autonomy (Circles)
+Rimuru acts as a background sovereign node. Through standardized bridges called **Circles**, Rimuru connects to chat channels (Slack, Discord, Telegram, WhatsApp) and webhooks to process events asynchronously, planning and executing tasks on the fly while retaining local boundaries.
 
 ---
 
-## 🏗️ II. System Architecture: The Tiered Isolation Model
+## 🏗️ II. Architecture Blueprint
 
-Rimuru is engineered as a layered ecosystem, where each layer acts as a firewall for the next. This ensures that even if an AI model "hallucinates" a destructive command, the system boundaries prevent it from executing without permission.
-
-### Architecture Map (System Blueprint)
 ```ascii
 ┌─────────────────────────────────────────────────────────────┐
 │                 COMMUNICATION LAYER (CIRCLES)               │
 │   ┌───────────┐    ┌───────────┐    ┌───────────┐           │
-│   │ WhatsApp  │    │  CLI TUI  │    │  Web UI   │           │
+│   │ WhatsApp  │    │  Slack    │    │ Telegram  │           │
 │   └─────┬─────┘    └─────┬─────┘    └─────┬─────┘           │
 └─────────┼────────────────┼────────────────┼─────────────────┘
-          │                │                │
+          │                │                │ (Webhooks & FFI)
           ▼                ▼                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                 THE GATE (SOVEREIGN GATEWAY)                │
@@ -56,195 +62,142 @@ Rimuru is engineered as a layered ecosystem, where each layer acts as a firewall
       │                        │                        │
       ▼                        ▼                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    LOCAL WORKSPACE & VAULT                  │
-│    Codebase  •  Encrypted Secrets  •  Semantic Memory       │
+│            LOCAL SANDBOXES, WORKSPACE & VAULT               │
+│   QuickJS WASM VM  •  WASI Sandbox  •  AES-256 Secrets      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### The Tiers of Isolation
-1. **The Perimeter (Circles)**: External adapters that normalize messages from apps like WhatsApp or Slack into the Rimuru Flow format.
-2. **The Fortress (The Gate)**: A high-performance HTTP/SSE server that handles the pairing of remote devices. It is the only component exposed to the network.
-3. **The Kernel (The Core)**: The orchestration engine. It manages the **ReAct (Reason+Act)** cycle, planning objectives and maintaining session state.
-4. **The Execution Layer (Runes & Shards)**: Isolated plugins. Runes are the "Hands" (tools) and Shards are the "Voice" (LLM connections).
-
 ---
 
-## 📖 III. The Grand Dictionary (Domain Language)
-
-To master Rimuru, you must speak the language of the Sovereign:
+## 📖 III. The Grand Dictionary
 
 | Term | Technical Definition |
 | :--- | :--- |
-| **Sovereign** | The central orchestration engine. It manages the agentic loop and state. |
-| **Shard** | A standardized bridge for LLM providers (OpenAI, Anthropic, Gemini, Ollama). |
-| **Rune** | A typed, permission-gated tool contract (e.g., `workspace.readFile`). |
-| **Vessel** | A "Vessel" is a specific agent instance (a Soul bound to a Shard and Vows). |
-| **Soul** | The personality and core mission of the agent, defined in `SOUL.md`. |
-| **Vow** | A permission (read, write, execute, network) granted to an agent. |
-| **Chronicle** | A high-fidelity conversation log and session memory. |
-| **Flow** | An immutable event stream providing 100% observability of internal states. |
-| **Circle** | A bridge to an external communication platform (e.g., WhatsApp). |
-| **Vault** | An AES-256 encrypted local store for API keys and workspace secrets. |
-| **Ritual** | A background automation task scheduled to run periodically. |
-| **Canvas** | A persistent document (Markdown/HTML) managed and edited by the AI. |
-| **Barrier** | The security mode of the runtime (none, readonly, or docker-sandboxed). |
+| **Sovereign** | The central reasoning kernel running the thought-plan-act loop. |
+| **Shard** | An adapter connecting Rimuru to LLM backends (Ollama, Gemini, Anthropic, OpenAI). |
+| **Rune** | A permission-gated local tool contract (e.g. `workspace.readFile`, `workspace.shell`). |
+| **Vow** | The specific risk categories (`read`, `write`, `execute`, `network`) granted to a Vessel. |
+| **Vessel** | A concrete runtime agent instance configured with a Shard and specific Vows. |
+| **Soul** | The system prompts and personality definitions located in `SOUL.md`. |
+| **Chronicle** | The locally indexed session conversation logs and memory store. |
+| **Vault** | The AES-256 encrypted hardware secret manager storing workspace API keys. |
+| **Circle** | An event-driven bridge adapter translating external payloads to Flow messages. |
+| **Barrier** | The security containment level of the runtime (`none`, `readonly`, or `docker`). |
 
 ---
 
-## 🧠 IV. The ReAct Reasoning Engine: Deep-Dive
+## ⚡ IV. Key Features & Hardened Security
 
-Rimuru does not operate on simple "Request-Response" cycles. It employs a **Reasoning + Action (ReAct)** loop that ensures every action is preceded by deliberate thought.
+### 🛡️ Tiered Zero-Trust Sandboxing
+Rimuru implements multi-layer isolation boundaries to execute untrusted code safely:
+1. **QuickJS WebAssembly VM**: Dynamic JS Runes generated at runtime are executed within a secure, in-process WebAssembly Virtual Machine. It isolates memory heap allocations, limits recursion, and prevents variables from leaking.
+2. **WASI Sandbox**: High-risk system binaries are run as precompiled `.wasm` modules using Node's `node:wasi` library, strictly virtualizing directory mappings.
+3. **Path-Level Restraints**: Path validation rejects any operations pointing outside the active workspace directory, keeping files in `.rimuru/` and system roots completely protected.
 
-### The Thought-Plan-Act Cycle
-When Rimuru receives an objective, it executes the following loop:
-1. **Synthesis**: It builds a prompt containing the current `SOUL.md`, the `Rune Registry`, and the `Chronicle` history.
-2. **Reasoning**: The model outputs a **Thought** block: *"I see the user wants to refactor the auth system. I first need to locate the auth handler."*
-3. **Tool Selection**: It outputs an **Action**: `workspace.findFiles`.
-4. **Vow Check**: The Kernel verifies: *"Does this vessel have 'read' permissions for the workspace?"*
-5. **Execution**: The Rune is invoked, and the result is returned as an **Observation**.
-6. **Reflection**: The AI reflects on the result: *"I found the file at src/auth.ts. Now I will read its content."*
+### 🗳️ Consensus Permission Validation
+High-risk tools (Runes) must be validated against a threshold-based **Consensus Gating Policy**. Rimuru routes permission queries to multiple voters (such as static lists, rule auditors, and LLM safety filters) and only grants execution if a consensus threshold is met.
 
-### Error Correction & Hallucination Prevention
-If the AI suggests a tool that doesn't exist, or provides invalid JSON for the input, the Kernel intercepts it. It feeds an error back to the AI: *"The action 'deleteSystem' does not exist. Please re-plan using the provided tools."* This prevents "Model Hallucinations" from causing system damage.
-
----
-
-## 🛡️ V. Security & The "Sovereign Blindspot"
-
-Rimuru implements a unique security model called the **Sovereign Blindspot**. This ensures that the AI assistant remains "blind" to your most sensitive secrets, even while it has the power to manage your code.
-
-### 1. Path-Level Isolation
-The file-system Runes (`readFile`, `listDir`, `editFile`) are hard-coded to reject any path inside the `.rimuru/` directory. 
-- **WhatsApp Protection**: The session keys for your WhatsApp connection live in `.rimuru/circles/whatsapp`. The AI can never read these.
-- **Vault Protection**: The AI can never see the `vault.json` file.
-
-### 2. The Permission Vows
-Runes are classified by risk levels:
-- **`read`**: Safe. Reading files or listing directories.
-- **`write`**: Moderate risk. Editing files or committing to Git.
-- **`execute`**: High risk. Running terminal commands or scripts.
-- **`network`**: High risk. Making external API calls beyond the LLM shard.
-
-### 3. Redacted Audit Traces
-Rimuru generates `traces` (JSON files) for every interaction. These are vital for debugging but could contain secrets. Rimuru's tracing engine automatically redacts:
-- Any string matching an entry in your **Vault**.
-- Any absolute file paths that reveal your system's username.
+### 🌀 Asynchronous Event-Driven Circles
+Webhooks from Slack, Telegram, and Discord are processed asynchronously using an **Ingest-and-Defer** pattern:
+- The Gate server immediately acknowledges inbound events with a `202 Accepted` response.
+- The reasoning loop executes in the background.
+- Upon completion, the result is pushed back to the platform using the adapter's outgoing `send()` API.
+- All webhooks are cryptographically authenticated via Slack HMAC-SHA256 signature verification and Discord Ed25519 public key verification.
+- Senders are partitioned into isolated user/channel-specific dynamic sessions to avoid context leaks.
 
 ---
 
-## ⌨️ VI. CLI Reference: Operational Excellence
+## 🚀 V. Getting Started
 
-The `rimuru` CLI is the "Command Center" of your Sovereign workspace.
+### 📦 1. Installation & Build
 
-### Core Interaction
-*   **`rimuru chat [prompt]`**: 
-    - **Interactive TUI**: If run without a prompt, launches a high-performance terminal interface.
-    - **Syntax Highlighting**: Code blocks in the TUI are rendered with full syntax colors.
-    - **Session Recovery**: Automatically resumes the last active chronicle.
-*   **`rimuru agent <objective>`**:
-    - Starts the autonomous reasoning loop.
-    - **Example**: `rimuru agent "Find all unused imports in the project and remove them."`
-*   **`rimuru ui` / `dashboard`**:
-    - A real-time monitoring dashboard.
-    - Displays: Active Shard, Last Thought, Flow Events, and Memory usage.
-
-### Lifecycle & Config
-*   **`rimuru init --wizard`**: The "Awakening" process. Walks you through setting up your first Vessel and Soul.
-*   **`rimuru doctor`**: Runs a 12-point diagnostic check on your Node.js environment, Vault connectivity, and Shard latency.
-*   **`rimuru config set <key> <value>`**: Directly manipulate the `rimuru.config.json` from the terminal.
-
-### Secret Management (The Vault)
-*   **`rimuru vault set <NAME> <VALUE>`**: Encrypts and stores a secret.
-*   **`rimuru vault get <NAME>`**: Decrypts and shows a secret (requires master authentication).
-*   **`rimuru vault list`**: Shows all stored secret names (but not their values).
-
----
-
-## 📱 VII. Circles: The WhatsApp Sovereign Node
-
-The WhatsApp Circle is our flagship communication bridge. It allows you to carry your Sovereign AI in your pocket without sacrificing your privacy to the cloud.
-
-### The "Strict Privacy" Protocol
-Unlike other WhatsApp bots that listen to every group and contact, Rimuru is **Hard-Locked** to you.
-1. **`isMe` Check**: Rimuru uses the WhatsApp `isMe` property to ensure it ONLY replies to the account owner.
-2. **Private "You" Chat**: It is designed to work in your own private thread (the chat where you can message yourself).
-3. **Silent by Default**: It will never see, log, or reply to your friends, family, or work groups.
-4. **Recursive Loop Prevention**: Since you and the bot share the same identity in a self-chat, Rimuru uses **Text Fingerprinting**. It fingerprints every reply it sends; if it sees that exact text again (which it will, because it's a self-chat), it ignores it to prevent an infinite loop.
-
----
-
-## 🛠️ VIII. Advanced Capability: Rituals & Rollbacks
-
-### 1. Rituals (Background Automation)
-Rituals allow you to schedule "Background Ghosts" to perform tasks while you sleep.
-- **Example**: `rimuru ritual create "code-audit" "Scan for security vulnerabilities in the last 10 commits" --every 1440` (once a day).
-- **Automation**: Rimuru will spin up a Sovereign instance in the background, perform the task, and save the result to a **Canvas**.
-
-### 2. Rollbacks (Safety Net)
-Rimuru keeps a record of every file edit it makes. If the AI breaks your code:
-- **`rimuru rollback list`**: See all recent AI edits.
-- **`rimuru rollback apply <id>`**: Instantly revert the code to its exact state before the AI touched it.
-
----
-
-## 🧠 IX. Memory Matrix: Chronicles & Semantic Search
-
-Rimuru implements a dual-memory system to provide both "Recent Focus" and "Long-Term Wisdom."
-
-### The Chronicle (Active Memory)
-Every message in a session is saved to a `Chronicle`. This provides the "Context Window" for the AI. When you say "Actually, change that function name," Rimuru knows which function you are talking about by reading the Chronicle.
-
-### Semantic Memory (Long-Term Archive)
-Rimuru indexes your workspace into a local vectorized database.
-- **Similarity Search**: When you ask "How do we handle auth?", Rimuru calculates the **Cosine Similarity** between your question and your entire codebase.
-- **Context Injection**: It injects the most relevant code snippets directly into the AI's "Thought" phase.
-
----
-
-## 🚀 X. Getting Started: The Sovereign Path
-
-### 1. Installation
 ```bash
-# Clone and build
+# Clone the repository
+git clone https://github.com/your-username/rimuru.git
+cd rimuru
+
+# Install dependencies and build the workspace
 pnpm install
 pnpm build
 ```
 
-### 2. Awakening
+### 🔮 2. Awakening the Sovereign
+
+Initialize your local workspace using the interactive setup wizard:
+
 ```bash
-# Start the setup wizard
+# Runs the interactive onboarding wizard
 pnpm --filter @rimuru/cli dev setup --wizard
 ```
+The wizard will help you configure your preferred **LLM Shard**, choose your sandbox **Barrier**, select your permission **Vows**, and automatically write the config to `rimuru.config.json`.
 
-### 3. Fortifying (Vault)
+### 🔑 3. Fortifying the Vault
+
+Configure your API keys in the local encrypted storage vault:
+
 ```bash
-# Set your API keys
-pnpm rimuru vault set OPENROUTER_API_KEY <your-key>
+# Store keys securely
+pnpm rimuru vault set OPENROUTER_API_KEY <your-api-key>
+pnpm rimuru vault set GEMINI_API_KEY <your-api-key>
+
+# List active vault entries
+pnpm rimuru vault list
 ```
 
-### 4. Bridging (Gate)
+---
+
+## 💬 VI. Usage & Interactive Interfaces
+
+### 🖥️ 1. The OpenTUI Terminal Chat Interface
+Rimuru features a state-of-the-art terminal user interface built with the high-performance **OpenTUI** layout engine. It renders a clean split-pane window, syntax-highlighted markdown chat history, real-time reasoning loops, and an **Events HUD** visualizing internal telemetry.
+
+To start the TUI:
 ```bash
-# Start the Gateway server
+# Launches the TUI chat interface
+pnpm rimuru chat
+```
+
+> [!TIP]
+> The TUI leverages OpenTUI's native Zig rendering core. Under Node.js, the CLI will automatically search for `bun` on your path and seamlessly respawn itself to execute natively at 30+ FPS!
+
+### 🌍 2. The Web Visual Canvas
+If you prefer a graphic layout, start the web interface to display a split-pane coding dashboard. The panel on the right features an **Interactive Canvas iframe** that automatically renders HTML/CSS/JS files built by the agent, allowing you to preview code in real time:
+
+```bash
+# Start Turborepo dev servers
+pnpm dev
+# Open http://localhost:19711 to access the web panel
+```
+
+### 🔌 3. Dynamic Webhook Integrations
+To listen to external platforms, start the Gate gateway server and configure your webhook endpoints:
+
+```bash
+# Start the HTTP/SSE Gateway server
 pnpm --filter @rimuru/cli dev gate start
 ```
 
-### 5. Connecting (WhatsApp)
+Webhooks will route requests through the following paths:
+*   **Slack Webhook**: `POST /circles/<circle-name>/slack`
+*   **Telegram Webhook**: `POST /circles/<circle-name>/telegram`
+*   **Discord Webhook**: `POST /circles/<circle-name>/discord`
+*   **Generic Webhook**: `POST /circles/<circle-name>/message`
+
+---
+
+## 🧪 VII. Testing
+
+Rimuru runs a test suite under Vitest validating sandbox containment, consensus gating, dynamic runes, and webhook signature verification:
+
 ```bash
-# Add the WhatsApp bridge and scan the QR
-pnpm --filter @rimuru/cli dev circle add whatsapp
+# Run all unit tests
+pnpm test
 ```
 
 ---
 
-## 📜 XI. License & Future Roadmap
+## 📜 VIII. License
 
-**License**: MIT. Developed for the liberation of the digital individual.
-
-### The Future of Sovereignty:
-- **Decentralized Handshakes**: Instances of Rimuru talking to each other securely.
-- **Local GPU Shards**: Full removal of external API dependencies.
-- **Hardware Sovereignty**: A dedicated Rimuru hardware node for the home.
-
----
+Distributed under the MIT License. Built for the liberation of the digital individual.
 
 **"The Sovereign man owns his tools. The Sovereign man owns his data. The Sovereign man owns his future."**
