@@ -65,8 +65,6 @@ import { setupWorkspace, setupWorkspaceInteractive } from "./setup.js";
 
 const h = () => dirname(fileURLToPath(import.meta.url));
 
-const [command = "dashboard", ...args] = process.argv.slice(2);
-
 function printBanner() {
   process.stdout.write(paint("\n" + [
     "   ____  ____ __  ________  ____  __ ",
@@ -79,131 +77,298 @@ function printBanner() {
   process.stdout.write(paint(`   Sovereign Runtime • v0.8.0-dev\n\n`, ansi.gray, ansi.italic));
 }
 
+import { Command } from "commander";
+
+const program = new Command();
+
+program
+  .name("rimuru")
+  .description("🌌 Rimuru: The Sovereign, Local-First AI Orchestration Kernel")
+  .version("0.8.0-dev")
+  .helpOption("-h, --help", "Display help menu");
+
+program
+  .command("chat [prompt...]")
+  .description("Run a one-off chat turn or start TUI")
+  .action(async (promptParts) => {
+    printBanner();
+    await chat(promptParts);
+  });
+
+program
+  .command("doctor")
+  .description("Verify environment and configuration diagnostics")
+  .option("--json", "Output diagnostics as JSON")
+  .option("--fix", "Attempt to auto-fix safe warning flags")
+  .action(async () => {
+    printBanner();
+    await doctor();
+  });
+
+program
+  .command("setup")
+  .alias("init")
+  .alias("awaken")
+  .description("Initialize or reset a Rimuru workspace")
+  .action(async () => {
+    printBanner();
+    await init();
+  });
+
+program
+  .command("gate [args...]")
+  .alias("gateway")
+  .description("Manage the Gate API webhook gateway server")
+  .action(async (gateArgs) => {
+    printBanner();
+    await gate(gateArgs);
+  });
+
+program
+  .command("session [args...]")
+  .alias("soul")
+  .description("Manage active session identities")
+  .action(async (sArgs) => {
+    printBanner();
+    await session(sArgs);
+  });
+
+program
+  .command("vessel [args...]")
+  .description("Describe or manage active vessels")
+  .action(async (vArgs) => {
+    printBanner();
+    await vessel(vArgs);
+  });
+
+program
+  .command("memory [args...]")
+  .alias("chronicle")
+  .description("Chronicle and semantic memory management")
+  .action(async (mArgs) => {
+    printBanner();
+    await memory(mArgs);
+  });
+
+program
+  .command("trace [args...]")
+  .alias("sage")
+  .description("Inspect or replay redacted execution traces")
+  .action(async (tArgs) => {
+    printBanner();
+    await trace(tArgs);
+  });
+
+program
+  .command("plugin [args...]")
+  .alias("skill")
+  .description("Manage workspace plugins")
+  .action(async (pArgs) => {
+    printBanner();
+    await plugin(pArgs);
+  });
+
+program
+  .command("mcp [args...]")
+  .description("Serve tools over Model Context Protocol (MCP)")
+  .action(async (mcpArgs) => {
+    await mcp(mcpArgs);
+  });
+
+program
+  .command("version")
+  .description("Show current version info")
+  .action(async (vArgs) => {
+    await version(vArgs);
+  });
+
+program
+  .command("rune [args...]")
+  .alias("tool")
+  .description("Invoke a policy-guarded tool")
+  .action(async (rArgs) => {
+    printBanner();
+    await rune(rArgs);
+  });
+
+program
+  .command("provider [args...]")
+  .alias("shard")
+  .description("Configure provider connections")
+  .action(async (pArgs) => {
+    printBanner();
+    await provider(pArgs);
+  });
+
+program
+  .command("channel [args...]")
+  .alias("circle")
+  .description("List circle integrations")
+  .action(async (cArgs) => {
+    printBanner();
+    await channel(cArgs);
+  });
+
+program
+  .command("pairing [args...]")
+  .description("List or approve client pairings")
+  .action(async (pArgs) => {
+    printBanner();
+    await pairing(pArgs);
+  });
+
+program
+  .command("vault [args...]")
+  .alias("secrets")
+  .description("Manage secrets in the encrypted store")
+  .action(async (vArgs) => {
+    printBanner();
+    await vault(vArgs);
+  });
+
+program
+  .command("ritual [args...]")
+  .alias("schedule")
+  .description("Schedule automated prompts/tasks")
+  .action(async (rArgs) => {
+    printBanner();
+    await ritual(rArgs);
+  });
+
+program
+  .command("canvas [args...]")
+  .description("Manage workspace artifacts")
+  .action(async (cArgs) => {
+    printBanner();
+    await canvas(cArgs);
+  });
+
+program
+  .command("update [args...]")
+  .alias("release")
+  .description("Check or install packages updates")
+  .action(async (rArgs) => {
+    printBanner();
+    await release(rArgs);
+  });
+
+program
+  .command("registry [args...]")
+  .alias("guild")
+  .description("Interact with the global schema registry")
+  .action(async (rArgs) => {
+    printBanner();
+    await registry(rArgs);
+  });
+
+program
+  .command("rollback [args...]")
+  .alias("rewind")
+  .description("Rewind file edits to previous states")
+  .action(async (rArgs) => {
+    printBanner();
+    await rollback(rArgs);
+  });
+
+program
+  .command("approval [args...]")
+  .alias("pact")
+  .description("Manage pending workspace change approvals")
+  .action(async (aArgs) => {
+    printBanner();
+    await approval(aArgs);
+  });
+
+program
+  .command("policy [args...]")
+  .alias("vow")
+  .description("Configure capability policies")
+  .action(async (pArgs) => {
+    printBanner();
+    await policy(pArgs);
+  });
+
+program
+  .command("plan [args...]")
+  .description("Display objective plans")
+  .action(async (pArgs) => {
+    printBanner();
+    await plan(pArgs);
+  });
+
+program
+  .command("config [args...]")
+  .alias("settings")
+  .description("View or modify runtime options")
+  .action(async (cArgs) => {
+    printBanner();
+    await configCmd(cArgs);
+  });
+
+program
+  .command("dashboard")
+  .alias("dash")
+  .alias("ui")
+  .description("View the Sovereign Dashboard")
+  .action(async () => {
+    printBanner();
+    await webDash();
+  });
+
+program
+  .command("tui")
+  .description("Start the interactive split-pane terminal chat window (Ink TUI)")
+  .action(async () => {
+    printBanner();
+    await tui();
+  });
+
+program
+  .command("flow")
+  .alias("loop")
+  .description("Stream continuous events telemetry to the terminal")
+  .action(async () => {
+    printBanner();
+    await flow();
+  });
+
+program
+  .command("agent [objective...]")
+  .description("Run a goal-oriented autonomous agent loop")
+  .action(async (objParts) => {
+    printBanner();
+    await agent(objParts);
+  });
+
+program
+  .command("index [args...]")
+  .description("Rebuild project lexical and semantic databases")
+  .action(async (idxArgs) => {
+    printBanner();
+    await indexWorkspace(idxArgs);
+  });
+
+// Set default action when no command is provided
+program
+  .action(async () => {
+    if (process.argv.slice(2).length === 0) {
+      printBanner();
+      help();
+    } else {
+      process.stderr.write(paint(`Unknown command: ${process.argv.slice(2).join(" ")}\n`, ansi.red));
+      help();
+      process.exitCode = 1;
+    }
+  });
+
+// Override help printing to match our beautiful existing help layout
+program.on("--help", () => {
+  process.stdout.write("\n");
+  help();
+});
 
 try {
-  if (command !== "mcp" && command !== "version") printBanner();
-  switch (command) {
-
-    case "chat":
-      await chat(args);
-      break;
-    case "doctor":
-      await doctor();
-      break;
-    case "init":
-    case "setup":
-    case "awaken":
-      await init();
-      break;
-    case "gate":
-    case "gateway":
-      await gate(args);
-      break;
-    case "session":
-    case "soul":
-      await session(args);
-      break;
-    case "vessel":
-      await vessel(args);
-      break;
-    case "memory":
-    case "chronicle":
-      await memory(args);
-      break;
-    case "trace":
-    case "sage":
-      await trace(args);
-      break;
-    case "plugin":
-    case "skill":
-      await plugin(args);
-      break;
-    case "mcp":
-      await mcp(args);
-      break;
-    case "version":
-      await version(args);
-      break;
-    case "rune":
-    case "tool":
-      await rune(args);
-      break;
-    case "provider":
-    case "shard":
-      await provider(args);
-      break;
-    case "channel":
-    case "circle":
-      await channel(args);
-      break;
-    case "pairing":
-      await pairing(args);
-      break;
-    case "vault":
-    case "secrets":
-      await vault(args);
-      break;
-    case "ritual":
-    case "schedule":
-      await ritual(args);
-      break;
-    case "canvas":
-      await canvas(args);
-      break;
-    case "update":
-    case "release":
-      await release(args);
-      break;
-    case "registry":
-    case "guild":
-      await registry(args);
-      break;
-    case "rollback":
-    case "rewind":
-      await rollback(args);
-      break;
-    case "approval":
-    case "pact":
-      await approval(args);
-      break;
-    case "policy":
-    case "vow":
-      await policy(args);
-      break;
-    case "plan":
-      plan(args);
-      break;
-    case "config":
-    case "settings":
-      await configCmd(args);
-      break;
-    case "dash":
-    case "dashboard":
-    case "ui":
-      await webDash();
-      break;
-
-    case "tui":
-      await tui();
-      break;
-    case "flow":
-    case "loop":
-      await flow();
-      break;
-    case "agent":
-      await agent(args);
-      break;
-    case "index":
-      await indexWorkspace(args);
-      break;
-    case "help":
-      help();
-      break;
-    default:
-      process.stderr.write(paint(`Unknown command: ${command}\n`, ansi.red));
-      help();
-  }
-
+  await program.parseAsync(process.argv);
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = 1;
