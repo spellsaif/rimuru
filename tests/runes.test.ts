@@ -18,4 +18,40 @@ describe("RuneRegistry", () => {
 
     expect(() => registry.register(workspaceRune)).toThrow("Rune already registered");
   });
+
+  it("recursively validates nested input schemas", async () => {
+    const registry = new RuneRegistry();
+    const nestedRune = {
+      name: "test.nested",
+      description: "nested validation test",
+      risk: "read" as const,
+      inputSchema: {
+        type: "object" as const,
+        required: ["meta"],
+        properties: {
+          meta: {
+            type: "object" as const,
+            required: ["id", "tags"],
+            properties: {
+              id: { type: "number" as const },
+              tags: { type: "array" as const }
+            }
+          }
+        }
+      },
+      async invoke(input: any) {
+        return input;
+      }
+    };
+    registry.register(nestedRune);
+
+    // Valid nested input
+    const valid = await registry.invoke("test.nested", { meta: { id: 123, tags: ["foo"] } }, { workspace: "/isekai", sessionId: "s1" });
+    expect(valid).toEqual({ meta: { id: 123, tags: ["foo"] } });
+
+    // Invalid nested input
+    await expect(
+      registry.invoke("test.nested", { meta: { id: "not-a-number", tags: ["foo"] } }, { workspace: "/isekai", sessionId: "s1" })
+    ).rejects.toThrow("meta.id: ");
+  });
 });
