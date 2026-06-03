@@ -1,6 +1,7 @@
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync } from "node:crypto";
+import { execSync } from "node:child_process";
 
 export interface VaultEntrySummary {
   readonly name: string;
@@ -83,7 +84,17 @@ function decryptSecret(entry: EncryptedSecret, env: NodeJS.ProcessEnv): string {
 }
 
 function vaultKey(env: NodeJS.ProcessEnv): Buffer {
-  const secret = env.RIMURU_VAULT_KEY ?? `rimuru-local:${process.platform}:${env.USER ?? env.USERNAME ?? process.env.USER ?? process.env.USERNAME ?? "user"}`;
+  let secret = env.RIMURU_VAULT_KEY;
+  if (!secret) {
+    try {
+      secret = execSync("secret-tool lookup app rimuru", { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    } catch {
+      // Secure keychain query failed or not available, fall back
+    }
+  }
+  if (!secret) {
+    throw new Error("RIMURU_VAULT_KEY environment variable is not configured and secure keychain lookup failed. Vault decryption/encryption denied.");
+  }
   // Use scrypt for strong key derivation with a fixed salt for local stability
   return scryptSync(secret, "rimuru-salt-v1", 32);
 }
