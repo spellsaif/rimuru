@@ -60,18 +60,13 @@ describe("WASM/JS synthesis and compilation engine", () => {
         allowedRisks: ["read", "write", "execute"] as any
       };
 
-      // Simple Rust code that prints hello or accesses input argument
-      // Since our WASI runner passes input values as string arguments to the WASM program,
-      // we can read them from env::args().
+      // Rust code that reads stdin and echoes back a JSON structure
       const sourceCode = `
-        use std::env;
+        use std::io::{self, Read};
         fn main() {
-            let args: Vec<String> = env::args().collect();
-            if args.len() > 1 {
-                println!("Hello, {}!", args[1]);
-            } else {
-                println!("Hello, World!");
-            }
+            let mut buffer = String::new();
+            io::stdin().read_to_string(&mut buffer).unwrap();
+            println!("{{\\\"echo\\\": {}}}", buffer.trim());
         }
       `;
 
@@ -79,23 +74,35 @@ describe("WASM/JS synthesis and compilation engine", () => {
       const result = await compileWasmRune.invoke({
         language: "rust",
         sourceCode,
-        name: "rust_hello",
-        description: "Greets input argument via WASI"
+        name: "rust_echo",
+        description: "Echoes input via WASI"
       }, context as any);
 
-      expect(result.path).toContain("rust_hello.wasm");
-      expect(result.configPath).toContain("rust_hello.json");
+      expect(result.path).toContain("rust_echo.wasm");
+      expect(result.configPath).toContain("rust_echo.json");
 
       // Discover sandboxed runes
       const runes = await discoverSandboxedRunes(root);
       expect(runes).toHaveLength(1);
       const rune = runes[0]!;
-      expect(rune.name).toBe("custom.rust_hello");
+      expect(rune.name).toBe("custom.rust_echo");
 
-      // Invoke the discovered rune
-      // We pass an object with arguments which gets transformed to array of values
-      const output = await rune.invoke({ arg1: "Rimuru" }, context as any);
-      expect(output).toContain("Hello, Rimuru!");
+      // Invoke the discovered rune with a structured object
+      // It passes the JSON input to stdin and parses the returned JSON output
+      const inputVal = { message: "Attested sovereign execution" };
+      
+      const t1 = performance.now();
+      const output = await rune.invoke(inputVal, context as any);
+      const firstDuration = performance.now() - t1;
+
+      expect(output).toEqual({ echo: inputVal });
+
+      // Run a second time to verify compilation caching speedup
+      const t2 = performance.now();
+      const output2 = await rune.invoke(inputVal, context as any);
+      const secondDuration = performance.now() - t2;
+
+      expect(output2).toEqual({ echo: inputVal });
     } finally {
       await rm(root, { recursive: true, force: true });
     }
