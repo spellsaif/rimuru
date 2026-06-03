@@ -23,7 +23,7 @@ export { AnthropicShard } from "./providers/anthropic.js";
 export { GeminiShard } from "./providers/gemini.js";
 export { MockShard } from "./providers/mock.js";
 export { gitDiffRune, gitRunes, gitStatusRune, gitSummaryRune } from "./runes/git.js";
-export { applyPatchRune, editFileRune, readFileRune, searchRune, shellRune, workspaceRunes, fileTreeRune } from "./runes/workspace.js";
+export { applyPatchRune, editFileRune, readFileRune, searchRune, shellRune, workspaceRunes, fileTreeRune, compileWasmRune } from "./runes/workspace.js";
 export { webSearchRune, webFetchUrlRune, webRunes } from "./runes/web.js";
 export { sendMessageRune } from "./runes/circle.js";
 export { applyPatchToText, applyUnifiedPatch, parseUnifiedPatch } from "./edit/patch.js";
@@ -48,6 +48,7 @@ export { redactSecrets } from "./security/redact.js";
 export { assertCommandName, resolveWorkspacePath } from "./security/workspace.js";
 export { runSandboxedCommand, sandboxModeFromEnv } from "./security/sandbox.js";
 export { executeDynamicRune } from "./security/sandbox-vm.js";
+export { createWorkspaceBranch, deleteWorkspaceBranch, mergeWorkspaceBranch } from "./security/branch.js";
 // Dashboard logic moved to @rimuru/cli
 
 export type { CircleConfig, ProviderAttempt, ProviderKind, RuntimeConfig, VesselConfig } from "./config/runtime-config.js";
