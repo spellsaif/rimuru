@@ -1362,8 +1362,8 @@ function parseProviderArg(value: string): ProviderKind {
   throw new Error(`Unsupported provider: ${value}`);
 }
 
-function parseBarrierArg(value: string): "none" | "readonly" | "docker" {
-  if (value === "none" || value === "readonly" || value === "docker") return value;
+function parseBarrierArg(value: string): "none" | "readonly" | "docker" | "wasi" {
+  if (value === "none" || value === "readonly" || value === "docker" || value === "wasi") return value;
   throw new Error(`Unsupported barrier: ${value}`);
 }
 

@@ -54,4 +54,17 @@ describe("RuneRegistry", () => {
       registry.invoke("test.nested", { meta: { id: "not-a-number", tags: ["foo"] } }, { workspace: "/isekai", sessionId: "s1" })
     ).rejects.toThrow("meta.id: ");
   });
+
+  it("allows case-insensitive lookups and invocations", async () => {
+    const registry = new RuneRegistry();
+    registry.register(workspaceRune);
+
+    const resultLower = await registry.invoke("workspace.ask", { question: "test" }, { workspace: "/tmp", sessionId: "s" });
+    const resultUpper = await registry.invoke("WORKSPACE.ASK", { question: "test" }, { workspace: "/tmp", sessionId: "s" });
+    const resultMix = await registry.invoke("WorkSpace.AsK", { question: "test" }, { workspace: "/tmp", sessionId: "s" });
+
+    expect(resultLower).toBeDefined();
+    expect(resultUpper).toBeDefined();
+    expect(resultMix).toBeDefined();
+  });
 });

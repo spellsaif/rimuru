@@ -51,7 +51,7 @@ export interface RuntimeConfig {
   readonly sessionId: string;
   readonly memoryDir: string;
   readonly allowedRisks: readonly string[];
-  readonly sandboxMode: "none" | "readonly" | "docker";
+  readonly sandboxMode: "none" | "readonly" | "docker" | "wasi";
   readonly vessels: Readonly<Record<string, VesselConfig>>;
   readonly fallbackShards: readonly ProviderAttempt[];
   readonly circles: readonly CircleConfig[];
@@ -161,8 +161,8 @@ function parseAllowedRisks(value: string): readonly string[] {
     .filter(Boolean);
 }
 
-function parseSandboxMode(value: string): "none" | "readonly" | "docker" {
-  if (value === "none" || value === "readonly" || value === "docker") return value;
+function parseSandboxMode(value: string): "none" | "readonly" | "docker" | "wasi" {
+  if (value === "none" || value === "readonly" || value === "docker" || value === "wasi") return value;
   throw new Error(`Unsupported sandbox mode: ${value}`);
 }
 

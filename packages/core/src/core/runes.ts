@@ -25,10 +25,11 @@ export class RuneRegistry {
   }
 
   register(rune: Rune): void {
-    if (this.#runes.has(rune.name)) {
+    const lowerName = rune.name.toLowerCase();
+    if (this.#runes.has(lowerName)) {
       throw new Error(`Rune already registered: ${rune.name}`);
     }
-    this.#runes.set(rune.name, rune);
+    this.#runes.set(lowerName, rune);
     if (rune.onRegister) {
       Promise.resolve(rune.onRegister(this)).catch((error) => {
         console.error(`[runes] Error running onRegister hook for ${rune.name}:`, error);
@@ -37,9 +38,10 @@ export class RuneRegistry {
   }
 
   deregister(name: string): void {
-    const rune = this.#runes.get(name);
+    const lowerName = name.toLowerCase();
+    const rune = this.#runes.get(lowerName);
     if (rune) {
-      this.#runes.delete(name);
+      this.#runes.delete(lowerName);
       if (rune.onDeregister) {
         Promise.resolve(rune.onDeregister(this)).catch((error) => {
           console.error(`[runes] Error running onDeregister hook for ${rune.name}:`, error);
@@ -63,7 +65,7 @@ export class RuneRegistry {
   }
 
   async invoke(name: string, input: unknown, context: RuneContext): Promise<unknown> {
-    const rune = this.#runes.get(name);
+    const rune = this.#runes.get(name.toLowerCase());
     if (!rune) throw new Error(`Unknown rune: ${name}`);
     validateSchema(rune.inputSchema, input, `Rune input invalid: ${name}`);
     this.#emit?.({ type: "rune.requested", rune: name, at: this.#clock() });
@@ -100,7 +102,7 @@ export class RuneRegistry {
   }
 
   async *invokeStream(name: string, input: unknown, context: RuneContext): AsyncIterable<unknown> {
-    const rune = this.#runes.get(name);
+    const rune = this.#runes.get(name.toLowerCase());
     if (!rune) throw new Error(`Unknown rune: ${name}`);
     validateSchema(rune.inputSchema, input, `Rune input invalid: ${name}`);
     this.#emit?.({ type: "rune.requested", rune: name, at: this.#clock() });

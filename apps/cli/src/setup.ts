@@ -24,7 +24,7 @@ export interface SetupOptions {
   readonly vessel?: string;
   readonly soul?: string;
   readonly vows?: readonly string[];
-  readonly barrier?: "none" | "readonly" | "docker";
+  readonly barrier?: "none" | "readonly" | "docker" | "wasi";
   readonly gatewayPort?: number;
   readonly circles?: readonly CircleConfig[];
   readonly force?: boolean;
@@ -150,7 +150,8 @@ export async function setupWorkspaceInteractive(options: Pick<SetupOptions, "wor
           options: [
             { label: "None (Raw access)", value: "none" },
             { label: "Read-only (Safety first)", value: "readonly" },
-            { label: "Docker (Maximum isolation)", value: "docker" }
+            { label: "Docker (Maximum isolation)", value: "docker" },
+            { label: "WASI (Lightweight WebAssembly sandbox)", value: "wasi" }
           ]
         })
     },
