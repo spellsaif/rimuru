@@ -33,6 +33,30 @@ export class AgentLoop {
     readonly chronicle?: Chronicle;
   }) {}
 
+  /**
+   * Spawns a speculative execution branch in a parallel workspace timeline.
+   * Copies parent chronicle history to the child session, runs the loop on a workspace branch, and returns the result.
+   */
+  async speculate(objective: string, childSessionId: string): Promise<AgentRunResult> {
+    const branchDir = await createWorkspaceBranch(this.options.workspace, childSessionId);
+    if (this.options.chronicle) {
+      const parentHistory = await this.options.chronicle.load(this.options.sessionId);
+      if (this.options.chronicle.overwrite) {
+        await this.options.chronicle.overwrite(childSessionId, parentHistory);
+      } else {
+        await this.options.chronicle.append(childSessionId, parentHistory);
+      }
+    }
+
+    const childLoop = new AgentLoop({
+      ...this.options,
+      workspace: branchDir,
+      sessionId: childSessionId
+    });
+
+    return await childLoop.run(objective);
+  }
+
 
 
   /**

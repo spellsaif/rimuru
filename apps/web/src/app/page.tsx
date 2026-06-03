@@ -360,12 +360,12 @@ export default function Dashboard() {
       </div>
 
 
-      <style jsx global>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
         body { font-family: 'Inter', sans-serif; }
-      `}</style>
+      `}} />
     </div>
   );
 }

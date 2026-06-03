@@ -52,7 +52,7 @@ export async function mergeWorkspaceBranch(workspace: string, branchId: string, 
 async function copyDirRecursive(src: string, dest: string, srcRoot: string, destRoot: string, options: BranchOptions): Promise<void> {
   const entries = await readdir(src, { withFileTypes: true });
 
-  for (const entry of entries) {
+  const tasks = entries.map(async (entry) => {
     const srcPath = join(src, entry.name);
     const destPath = join(dest, entry.name);
 
@@ -67,7 +67,7 @@ async function copyDirRecursive(src: string, dest: string, srcRoot: string, dest
             await cp(srcPath, destPath, { recursive: true });
           }
         }
-        continue;
+        return;
       }
 
       await mkdir(destPath, { recursive: true });
@@ -75,19 +75,21 @@ async function copyDirRecursive(src: string, dest: string, srcRoot: string, dest
     } else if (entry.isFile()) {
       await cp(srcPath, destPath);
     }
-  }
+  });
+
+  await Promise.all(tasks);
 }
 
 async function mergeDirRecursive(src: string, dest: string, srcRoot: string, destRoot: string, options: BranchOptions, mergedFiles: string[]): Promise<void> {
   const entries = await readdir(src, { withFileTypes: true });
 
-  for (const entry of entries) {
+  const tasks = entries.map(async (entry) => {
     const srcPath = join(src, entry.name);
     const destPath = join(dest, entry.name);
 
     if (entry.isDirectory()) {
       if (options.ignoreDirs?.includes(entry.name)) {
-        continue;
+        return;
       }
       await mkdir(destPath, { recursive: true });
       await mergeDirRecursive(srcPath, destPath, srcRoot, destRoot, options, mergedFiles);
@@ -109,5 +111,7 @@ async function mergeDirRecursive(src: string, dest: string, srcRoot: string, des
         mergedFiles.push(resolve(destPath));
       }
     }
-  }
+  });
+
+  await Promise.all(tasks);
 }
