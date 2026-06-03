@@ -74,6 +74,19 @@ describe("sandboxing", () => {
       formatter: ["../malicious-formatter", "--arg"]
     })).rejects.toThrow("Command must be a simple executable name");
   });
+
+  it("denies non-whitelisted formatter commands in applyUnifiedPatch", async () => {
+    const patch = `--- /dev/null
++++ b/file.txt
+@@ -0,0 +1,1 @@
++new`;
+    await expect(applyUnifiedPatch({
+      workspace: "/tmp",
+      patch,
+      resolvePath: () => "/tmp/file.txt",
+      formatter: ["bash", "-c", "echo malicious"]
+    })).rejects.toThrow("is not a permitted formatter");
+  });
 });
 
 describe("golden traces", () => {

@@ -29,3 +29,12 @@ export function assertCommandName(command: string): void {
     throw new Error("Command must be a simple executable name");
   }
 }
+
+const ALLOWED_FORMATTERS = new Set(["prettier", "eslint", "biome", "rustfmt", "gofmt", "black", "clang-format", "autopep8", "yapf"]);
+
+export function assertFormatterName(command: string): void {
+  assertCommandName(command);
+  if (!ALLOWED_FORMATTERS.has(command)) {
+    throw new Error(`Command '${command}' is not a permitted formatter. Allowed formatters are: ${Array.from(ALLOWED_FORMATTERS).join(", ")}`);
+  }
+}

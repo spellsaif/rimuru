@@ -1,6 +1,6 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import type { Rune, RuneRisk } from "../core/types.js";
+import type { Rune, RuneRisk, RuneContext } from "../core/types.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
@@ -69,7 +69,7 @@ function parseRuneMd(folderName: string, content: string, root: string): Rune | 
     name: `workspace.${meta.name}`,
     description: meta.description,
     risk: meta.risk,
-    async invoke(input: unknown) {
+    async invoke(input: unknown, context: RuneContext) {
       if (!meta.command) return content; // Just return instructions if no command
 
       const cmd = meta.command.replace(/\{\{(\w+)\}\}/g, (_, key) => {
@@ -81,8 +81,13 @@ function parseRuneMd(folderName: string, content: string, root: string): Rune | 
       const program = tokens[0]!.replace(/^"|"$/g, "");
       const args = tokens.slice(1).map(arg => arg.replace(/^"|"$/g, ""));
 
-      const { stdout, stderr } = await execFileAsync(program, args, { cwd: root });
-      return stdout || stderr;
+      const { runSandboxedCommand } = await import("../security/sandbox.js");
+      const result = await runSandboxedCommand({
+        command: program,
+        args,
+        workspace: context?.workspace ?? root
+      });
+      return result.stdout || result.stderr;
     }
   };
 }

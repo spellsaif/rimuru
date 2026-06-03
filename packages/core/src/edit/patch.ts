@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { assertCommandName } from "../security/workspace.js";
+import { assertCommandName, assertFormatterName } from "../security/workspace.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -134,7 +134,7 @@ export async function applyUnifiedPatch(options: ApplyPatchOptions): Promise<Pat
         if (options.formatter && options.formatter.length > 0) {
           const [command, ...args] = options.formatter;
           if (command) {
-            assertCommandName(command);
+            assertFormatterName(command);
             await execFileAsync(command, [...args, target], { cwd: options.workspace, maxBuffer: 1024 * 1024 });
           }
         }
