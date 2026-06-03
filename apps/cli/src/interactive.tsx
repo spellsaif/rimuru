@@ -1,4 +1,5 @@
-import { spawnSync } from "node:child_process";
+import React, { useState, useEffect } from "react";
+import { render, Box, Text, useInput, useApp } from "ink";
 import type { Flow, FlowBus, Sovereign, JsonChronicle, JsonTraceStore } from "@rimuru/core";
 
 export interface TuiState {
@@ -21,228 +22,195 @@ export interface InteractiveTuiOptions {
   readonly sessionId: string;
   readonly provider: string;
   readonly model: string;
-  readonly input?: any;
-  readonly output?: any;
 }
 
-export async function runInteractiveTui(options: InteractiveTuiOptions): Promise<void> {
-  // 1. Cross-Runtime Check & Respawn under Bun
-  if (!process.versions.bun) {
-    try {
-      const hasBun = spawnSync("bun", ["-v"], { stdio: "ignore" }).status === 0;
-      if (hasBun) {
-        const result = spawnSync("bun", [process.argv[1], ...process.argv.slice(2)], { stdio: "inherit" });
-        process.exit(result.status ?? 0);
-      }
-    } catch {}
-    
-    console.error("\x1b[31m\n❌ Error: The OpenTUI chat interface requires Bun.js for high-performance terminal rendering.\nPlease install Bun (https://bun.sh) and try again.\n\x1b[0m");
-    process.exit(1);
-  }
-
-  // 2. Lazy Import of OpenTUI core to prevent load-time FFI crashes on Node.js
-  const { createCliRenderer, Box, Text, MarkdownRenderable, Input, SyntaxStyle } = await import("@opentui/core");
-
-  // 3. Initialize State
-  let state: TuiState = {
-    sessionId: options.sessionId,
-    workspace: options.workspace,
-    provider: options.provider,
-    model: options.model,
-    transcript: [],
-    events: [],
-    mode: "idle"
-  };
-
-  // 4. Initialize OpenTUI CliRenderer
-  const renderer = await createCliRenderer({
-    exitOnCtrlC: true,
-    targetFps: 30
-  });
-
-  // 5. Create UI Components
-  const titleText = Text({
-    content: `Session: ${state.sessionId} (${state.model})`
-  });
-  
-  const titleBar = Box({
-    height: 3,
-    width: "100%",
-    border: true,
-    borderStyle: "single",
-    borderColor: "cyan",
-    title: " RIMURU SESSIONS ",
-    paddingX: 1,
-    alignItems: "center",
-    justifyContent: "center"
-  }, titleText);
-
-  const chatMarkdown = new MarkdownRenderable(renderer, {
-    content: "# Chat History\nWaiting for conversation...",
-    syntaxStyle: SyntaxStyle.create(),
-    width: "100%",
-    height: "100%"
-  });
-
-  const chatBox = Box({
-    flexGrow: 2,
-    height: "100%",
-    border: true,
-    borderStyle: "single",
-    borderColor: "gray",
-    title: " CONVERSATION ",
-    padding: 1
-  }, chatMarkdown);
-
-  const hudText = Text({
-    content: "No events recorded yet."
-  });
-
-  const hudBox = Box({
-    width: 32,
-    height: "100%",
-    border: true,
-    borderStyle: "single",
-    borderColor: "yellow",
-    title: " EVENTS HUD ",
-    padding: 1,
-    marginLeft: 1
-  }, hudText);
-
-  const middleContainer = Box({
-    flexDirection: "row",
-    flexGrow: 1,
-    width: "100%",
-    marginY: 1
-  }, chatBox, hudBox);
-
-  const inputField = Input({
-    placeholder: "Ask Rimuru something...",
-    width: "100%",
-    height: 1,
-    focusable: true
-  });
-
-  const footerBox = Box({
-    height: 3,
-    width: "100%",
-    border: true,
-    borderStyle: "single",
-    borderColor: "cyan",
-    title: " ❯ INPUT ",
-    paddingX: 1
-  }, inputField);
-
-  const rootContainer = Box({
-    flexDirection: "column",
-    width: "100%",
-    height: "100%",
-    padding: 1
-  }, titleBar, middleContainer, footerBox);
-
-  renderer.root.add(rootContainer);
-  inputField.focus();
-
-  // 6. Update functions
-  const updateChatMarkdown = () => {
-    let markdown = "";
-    for (const msg of state.transcript) {
-      const header = msg.role === "user" ? "### 👤 YOU" : msg.role === "system" ? "### ⚠️ SYSTEM" : "### 🌌 RIMURU";
-      markdown += `${header}\n${msg.content}\n\n`;
-    }
-    chatMarkdown.content = markdown || "# Chat Session\nAsk Rimuru a question to start the conversation.";
-  };
-
-  const updateEventsHUD = () => {
-    if (state.events.length === 0) {
-      hudText.content = "No events recorded yet.";
+const TextInput = ({ value, onChange, onSubmit, placeholder, isDisabled }: any) => {
+  useInput((input, key) => {
+    if (isDisabled) return;
+    if (key.return) {
+      onSubmit();
       return;
     }
-    let hudContent = "";
-    for (const e of state.events.slice(-10)) {
-      const type = e.type.split(".")[1] || e.type;
-      let icon = "•";
-      if (e.type.startsWith("rune.")) icon = "⚡";
-      else if (e.type.startsWith("run.")) icon = "🌀";
-      else if (e.type === "thought.emitted") icon = "🧠";
-      
-      hudContent += `${icon} ${type.toUpperCase()}\n`;
+    if (key.backspace || key.delete) {
+      onChange(value.slice(0, -1));
+      return;
     }
-    hudText.content = hudContent;
-  };
-
-  // 7. Hook up FlowBus events
-  const unlisten = options.flowBus.listen((event) => {
-    state = { ...state, events: [...state.events, event].slice(-20) };
-    if (event.type === "rune.requested") state = { ...state, activeRune: event.rune };
-    if (event.type === "rune.completed" || event.type === "rune.denied") state = { ...state, activeRune: undefined };
-    updateEventsHUD();
+    // If it's a normal character
+    if (input && !key.ctrl && !key.meta && !key.escape) {
+      onChange(value + input);
+    }
   });
 
-  // 8. Handle user input submission
-  let isThinking = false;
-  inputField.on("enter", async () => {
-    if (isThinking) return;
-    const prompt = inputField.value.trim();
-    if (!prompt) return;
+  return (
+    <Text color={value ? "white" : "gray"}>
+      {value || placeholder}
+    </Text>
+  );
+};
 
-    isThinking = true;
-    inputField.value = "";
-    inputField.placeholder = "Rimuru is thinking...";
-    footerBox.title = " ◔ THINKING ";
-    footerBox.borderColor = "yellow";
+const TuiApp = ({ options }: { options: InteractiveTuiOptions }) => {
+  const [transcript, setTranscript] = useState<any[]>([]);
+  const [events, setEvents] = useState<Flow[]>([]);
+  const [inputText, setInputText] = useState("");
+  const [isThinking, setIsThinking] = useState(false);
+  const [activeRune, setActiveRune] = useState<string | undefined>();
+  const { exit } = useApp();
+
+  useEffect(() => {
+    const unlisten = options.flowBus.listen((event: Flow) => {
+      setEvents((prev) => [...prev, event].slice(-10));
+      if (event.type === "rune.requested") {
+        setActiveRune(event.rune);
+      }
+      if (event.type === "rune.completed" || event.type === "rune.denied") {
+        setActiveRune(undefined);
+      }
+    });
+    return () => unlisten();
+  }, [options.flowBus]);
+
+  useInput((input, key) => {
+    if (key.ctrl && input === "c") {
+      exit();
+    }
+  });
+
+  const handleSubmit = async () => {
+    const prompt = inputText.trim();
+    if (!prompt || isThinking) return;
+
+    setInputText("");
+    setIsThinking(true);
+
+    const userMsg = { role: "user" as const, content: prompt };
+    const assistantMsg = { role: "assistant" as const, content: "" };
     
-    state = {
-      ...state,
-      transcript: [...state.transcript, { role: "user", content: prompt }, { role: "assistant", content: "" }]
-    };
-    updateChatMarkdown();
+    setTranscript((prev) => [...prev, userMsg, assistantMsg]);
 
     try {
-      const assistantIdx = state.transcript.length - 1;
+      let currentContent = "";
       await options.sovereign.run({
         prompt,
-        workspace: state.workspace,
-        sessionId: state.sessionId,
+        workspace: options.workspace,
+        sessionId: options.sessionId,
         onText: (text) => {
-          const transcript = [...state.transcript];
-          const current = transcript[assistantIdx];
-          transcript[assistantIdx] = { role: "assistant", content: (current?.content ?? "") + text };
-          state = { ...state, transcript };
-          updateChatMarkdown();
+          currentContent += text;
+          setTranscript((prev) => {
+            const next = [...prev];
+            if (next.length > 0) {
+              next[next.length - 1] = { role: "assistant" as const, content: currentContent };
+            }
+            return next;
+          });
         }
       });
-    } catch (e) {
+    } catch (e: any) {
       const errorMsg = e instanceof Error ? e.message : String(e);
-      state = {
-        ...state,
-        transcript: [...state.transcript, { role: "system", content: `❌ Error: ${errorMsg}` }]
-      };
-      updateChatMarkdown();
+      setTranscript((prev) => [
+        ...prev,
+        { role: "system" as const, content: `❌ Error: ${errorMsg}` }
+      ]);
     } finally {
-      isThinking = false;
-      inputField.placeholder = "Ask Rimuru something...";
-      footerBox.title = " ❯ INPUT ";
-      footerBox.borderColor = "cyan";
-      inputField.focus();
+      setIsThinking(false);
     }
-  });
-
-  // Handle manual Ctrl+C clean exit
-  renderer.keyInput.on("keypress", (keyEvent) => {
-    if (keyEvent.ctrl && keyEvent.name === "c") {
-      cleanup();
-      process.exit(0);
-    }
-  });
-
-  const cleanup = () => {
-    unlisten();
-    renderer.destroy();
   };
 
-  // Start renderer
-  renderer.start();
+  return (
+    <Box flexDirection="column" width={80} borderStyle="single" borderColor="cyan" padding={1}>
+      {/* Title Bar */}
+      <Box justifyContent="center" marginBottom={1}>
+        <Text bold color="cyan">🌌 RIMURU SOVEREIGN SESSIONS 🌌</Text>
+      </Box>
+      <Box justifyContent="space-between" marginBottom={1}>
+        <Text gray>Session: {options.sessionId}</Text>
+        <Text gray>Model: {options.model} ({options.provider})</Text>
+      </Box>
+
+      {/* Main Area (Split Chat & Events) */}
+      <Box flexDirection="row" height={16} marginBottom={1}>
+        {/* Chat History Panel */}
+        <Box flexDirection="column" width={50} borderStyle="round" borderColor="gray" padding={1} marginRight={2}>
+          <Box marginBottom={1}>
+            <Text bold color="white">💬 CONVERSATION</Text>
+          </Box>
+          <Box flexDirection="column" flexGrow={1}>
+            {transcript.length === 0 ? (
+              <Text gray italic>Ask Rimuru a question to start the conversation...</Text>
+            ) : (
+              // Show only the last 3-4 messages to avoid terminal overflow
+              transcript.slice(-4).map((msg, idx) => {
+                const isUser = msg.role === "user";
+                const isSystem = msg.role === "system";
+                const roleLabel = isUser ? "👤 YOU" : isSystem ? "⚠️ SYSTEM" : "🌌 RIMURU";
+                const roleColor = isUser ? "green" : isSystem ? "red" : "cyan";
+                return (
+                  <Box key={idx} flexDirection="column" marginBottom={1}>
+                    <Text bold color={roleColor}>{roleLabel}:</Text>
+                    <Text>{msg.content || (isThinking && idx === transcript.length - 1 ? "thinking..." : "")}</Text>
+                  </Box>
+                );
+              })
+            )}
+          </Box>
+        </Box>
+
+        {/* Telemetry Events Panel */}
+        <Box flexDirection="column" width={26} borderStyle="round" borderColor="yellow" padding={1}>
+          <Box marginBottom={1}>
+            <Text bold color="yellow">⚡ EVENTS HUD</Text>
+          </Box>
+          <Box flexDirection="column">
+            {events.length === 0 ? (
+              <Text gray italic>No events recorded yet.</Text>
+            ) : (
+              events.map((e, idx) => {
+                const type = e.type.split(".")[1] || e.type;
+                let icon = "•";
+                if (e.type.startsWith("rune.")) icon = "⚡";
+                else if (e.type.startsWith("run.")) icon = "🌀";
+                else if (e.type === "thought.emitted") icon = "🧠";
+                return (
+                  <Text key={idx} wrap="truncate-end">
+                    <Text color="yellow">{icon}</Text> {type.toUpperCase()}
+                  </Text>
+                );
+              })
+            )}
+            {activeRune && (
+              <Box marginTop={1}>
+                <Text bold color="magenta">Active: {activeRune}</Text>
+              </Box>
+            )}
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Input Box */}
+      <Box flexDirection="column" borderStyle="single" borderColor={isThinking ? "yellow" : "cyan"} paddingX={1}>
+        <Box>
+          <Text bold color={isThinking ? "yellow" : "cyan"}>
+            {isThinking ? "◔ THINKING" : "❯ INPUT"}:{" "}
+          </Text>
+          <TextInput
+            value={inputText}
+            onChange={setInputText}
+            onSubmit={handleSubmit}
+            placeholder="Ask Rimuru something..."
+            isDisabled={isThinking}
+          />
+        </Box>
+      </Box>
+      
+      <Box marginTop={1}>
+        <Text gray italic>Press Ctrl+C to exit.</Text>
+      </Box>
+    </Box>
+  );
+};
+
+export async function runInteractiveTui(options: InteractiveTuiOptions): Promise<void> {
+  const { waitUntilExit } = render(<TuiApp options={options} />);
+  await waitUntilExit();
 }
 
 export async function promptApproval(question: string): Promise<boolean> {
