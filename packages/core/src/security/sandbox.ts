@@ -11,7 +11,10 @@ export interface SandboxCommandInput {
   readonly args?: readonly string[];
   readonly workspace: string;
   readonly signal?: AbortSignal;
+  readonly stdin?: string;
 }
+
+const compiledModulesCache = new Map<string, WebAssembly.Module>();
 
 export async function runSandboxedCommand(input: SandboxCommandInput, mode: SandboxMode = sandboxModeFromEnv()): Promise<{ readonly stdout: string; readonly stderr: string }> {
   if (mode !== "wasi") {
@@ -29,6 +32,7 @@ export async function runSandboxedCommand(input: SandboxCommandInput, mode: Sand
   if (mode === "wasi") {
     let stdoutFile: any;
     let stderrFile: any;
+    let stdinFile: any;
     const { join, resolve } = await import("node:path");
     const { resolveWorkspacePath } = await import("./workspace.js");
     
@@ -38,23 +42,37 @@ export async function runSandboxedCommand(input: SandboxCommandInput, mode: Sand
 
     const stdoutPath = join(input.workspace, `.rimuru-wasi-stdout-${Date.now()}-${Math.random().toString(36).slice(2)}.log`);
     const stderrPath = join(input.workspace, `.rimuru-wasi-stderr-${Date.now()}-${Math.random().toString(36).slice(2)}.log`);
+    const stdinPath = join(input.workspace, `.rimuru-wasi-stdin-${Date.now()}-${Math.random().toString(36).slice(2)}.log`);
+
     try {
       const { WASI } = await import("node:wasi");
-      const { readFile, open, unlink } = await import("node:fs/promises");
+      const { readFile, open, unlink, writeFile } = await import("node:fs/promises");
       
       stdoutFile = await open(stdoutPath, "w+");
       stderrFile = await open(stderrPath, "w+");
       
+      if (input.stdin !== undefined) {
+        await writeFile(stdinPath, input.stdin, "utf8");
+        stdinFile = await open(stdinPath, "r");
+      }
+
       const wasi = new WASI({
         version: "preview1",
         args: [input.command, ...(input.args ?? [])],
         env: process.env,
         preopens: { "/workspace": input.workspace },
+        stdin: stdinFile ? stdinFile.fd : undefined,
         stdout: stdoutFile.fd,
         stderr: stderrFile.fd
       });
-      const wasmBuffer = await readFile(wasmPath);
-      const wasmModule = await WebAssembly.compile(wasmBuffer);
+
+      let wasmModule = compiledModulesCache.get(wasmPath);
+      if (!wasmModule) {
+        const wasmBuffer = await readFile(wasmPath);
+        wasmModule = await WebAssembly.compile(wasmBuffer);
+        compiledModulesCache.set(wasmPath, wasmModule);
+      }
+      
       const instance = await WebAssembly.instantiate(wasmModule, wasi.getImportObject() as any);
       wasi.start(instance);
       
@@ -62,6 +80,12 @@ export async function runSandboxedCommand(input: SandboxCommandInput, mode: Sand
       await stderrFile.close();
       stdoutFile = undefined;
       stderrFile = undefined;
+
+      if (stdinFile) {
+        await stdinFile.close();
+        stdinFile = undefined;
+        await unlink(stdinPath);
+      }
       
       const stdout = await readFile(stdoutPath, "utf8");
       const stderr = await readFile(stderrPath, "utf8");
@@ -77,6 +101,9 @@ export async function runSandboxedCommand(input: SandboxCommandInput, mode: Sand
       if (stderrFile) {
         try { await stderrFile.close(); } catch {}
       }
+      if (stdinFile) {
+        try { await stdinFile.close(); } catch {}
+      }
       try {
         const { unlink } = await import("node:fs/promises");
         await unlink(stdoutPath);
@@ -84,6 +111,10 @@ export async function runSandboxedCommand(input: SandboxCommandInput, mode: Sand
       try {
         const { unlink } = await import("node:fs/promises");
         await unlink(stderrPath);
+      } catch {}
+      try {
+        const { unlink } = await import("node:fs/promises");
+        await unlink(stdinPath);
       } catch {}
       throw new Error(`WASI execution failed: wasm binary for '${input.command}' not found or invalid (${e.message})`);
     }
