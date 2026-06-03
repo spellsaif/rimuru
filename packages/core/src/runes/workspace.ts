@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile, readdir } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
-import type { Rune, RuneContext } from "../core/types.js";
+import type { Rune, RuneContext, RuneSchema } from "../core/types.js";
 import { applyUnifiedPatch } from "../edit/patch.js";
 import { runSandboxedCommand } from "../security/sandbox.js";
 import { assertCommandName, resolveWorkspacePath } from "../security/workspace.js";
@@ -225,6 +225,92 @@ export const fileTreeRune: Rune<{ readonly maxDepth?: number }, { readonly tree:
   }
 };
 
+export const compileWasmRune: Rune<{
+  readonly language: "rust" | "typescript";
+  readonly sourceCode: string;
+  readonly name: string;
+  readonly description: string;
+  readonly risk?: "read" | "write" | "execute";
+  readonly inputSchema?: RuneSchema;
+  readonly outputSchema?: RuneSchema;
+}, { readonly path: string; readonly configPath: string }> = {
+  name: "workspace.compileWasm",
+  description: "Compiles Rust or transpiles TypeScript to a sandboxed Rune stored in the workspace .rimuru/runes/ directory.",
+  risk: "write",
+  inputSchema: {
+    type: "object",
+    required: ["language", "sourceCode", "name", "description"],
+    properties: {
+      language: { type: "string" },
+      sourceCode: { type: "string" },
+      name: { type: "string" },
+      description: { type: "string" },
+      risk: { type: "string" },
+      inputSchema: { type: "object" },
+      outputSchema: { type: "object" }
+    }
+  },
+  async invoke(input, context) {
+    const { mkdir, writeFile } = await import("node:fs/promises");
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const execFileAsync = promisify(execFile);
+    
+    // Ensure name is clean
+    const safeNamePattern = /^[a-zA-Z0-9_-]+$/;
+    if (!safeNamePattern.test(input.name)) {
+      throw new Error(`Invalid Rune name: ${input.name}. Use alphanumeric characters, dashes, and underscores only.`);
+    }
+
+    const runesDir = safeWorkspacePath(context, ".rimuru/runes");
+    await mkdir(runesDir, { recursive: true });
+
+    const targetPath = join(runesDir, input.name);
+    const configPath = join(runesDir, `${input.name}.json`);
+
+    const runeConfig = {
+      name: `custom.${input.name}`,
+      description: input.description,
+      risk: input.risk || "execute",
+      inputSchema: input.inputSchema,
+      outputSchema: input.outputSchema
+    };
+
+    if (input.language === "typescript") {
+      const ts = await import("typescript");
+      const transpiled = ts.default.transpileModule(input.sourceCode, {
+        compilerOptions: { target: ts.default.ScriptTarget.ES2022, module: ts.default.ModuleKind.ESNext }
+      }).outputText;
+
+      const jsPath = `${targetPath}.js`;
+      await writeFile(jsPath, transpiled, "utf8");
+      await writeFile(configPath, JSON.stringify(runeConfig, null, 2), "utf8");
+
+      return { path: jsPath, configPath };
+    } else if (input.language === "rust") {
+      const tempRustPath = join(context.workspace, `.temp-${Date.now()}-${input.name}.rs`);
+      const wasmPath = `${targetPath}.wasm`;
+      const crateName = input.name.replace(/[^a-zA-Z0-9_]/g, "_");
+
+      try {
+        await writeFile(tempRustPath, input.sourceCode, "utf8");
+        // Compile using rustc with target wasm32-wasip1
+        await execFileAsync("rustc", ["--target", "wasm32-wasip1", "--crate-name", crateName, "-O", "-o", wasmPath, tempRustPath], { cwd: context.workspace });
+        await writeFile(configPath, JSON.stringify(runeConfig, null, 2), "utf8");
+      } finally {
+        const { unlink } = await import("node:fs/promises");
+        try {
+          await unlink(tempRustPath);
+        } catch {}
+      }
+
+      return { path: wasmPath, configPath };
+    } else {
+      throw new Error(`Unsupported compilation language: ${input.language}`);
+    }
+  }
+};
+
 export const workspaceRunes = [
   readFileRune, 
   listDirRune, 
@@ -235,7 +321,8 @@ export const workspaceRunes = [
   writeFileRune, 
   deleteFileRune,
   applyPatchRune,
-  fileTreeRune
+  fileTreeRune,
+  compileWasmRune
 ] as const;
 
 
@@ -250,16 +337,45 @@ function isExitCode(error: unknown, code: number): boolean {
 function createPreview(before: string, after: string): string {
   const beforeLines = before.split("\n");
   const afterLines = after.split("\n");
-  const max = Math.max(beforeLines.length, afterLines.length);
-  const changes: string[] = ["--- before", "+++ after"];
-  for (let index = 0; index < max; index += 1) {
-    if (beforeLines[index] !== afterLines[index]) {
-      if (beforeLines[index] !== undefined) changes.push(`- ${beforeLines[index]}`);
-      if (afterLines[index] !== undefined) changes.push(`+ ${afterLines[index]}`);
+  const n = beforeLines.length;
+  const m = afterLines.length;
+
+  const dp: number[][] = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0));
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= m; j++) {
+      if (beforeLines[i - 1] === afterLines[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
     }
-    if (changes.length >= 20) break;
   }
-  return changes.length === 2 ? "No visible line changes" : changes.join("\n");
+
+  const changes: string[] = ["--- before", "+++ after"];
+  let i = n, j = m;
+  const temp: string[] = [];
+
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && beforeLines[i - 1] === afterLines[j - 1]) {
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      temp.push(`+ ${afterLines[j - 1]}`);
+      j--;
+    } else if (i > 0 && (j === 0 || dp[i][j - 1] < dp[i - 1][j])) {
+      temp.push(`- ${beforeLines[i - 1]}`);
+      i--;
+    }
+  }
+
+  temp.reverse();
+  const capped = temp.slice(0, 30);
+  changes.push(...capped);
+  if (temp.length > 30) {
+    changes.push(`... and ${temp.length - 30} more line changes`);
+  }
+
+  return temp.length === 0 ? "No visible line changes" : changes.join("\n");
 }
 
 function safeName(value: string): string {
