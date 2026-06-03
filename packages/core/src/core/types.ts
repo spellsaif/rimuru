@@ -80,6 +80,7 @@ export interface Chronicle {
   load(sessionId: string): Promise<readonly Message[]>;
   append(sessionId: string, messages: readonly Message[]): Promise<void>;
   overwrite?(sessionId: string, messages: readonly Message[]): Promise<void>;
+  delete?(sessionId: string): Promise<void>;
 }
 
 export interface Rune<Input = unknown, Output = unknown> {

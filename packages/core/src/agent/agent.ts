@@ -64,6 +64,15 @@ export class AgentLoop {
    */
   async run(objective: string, onText?: (text: string) => void): Promise<AgentRunResult> {
     const startingHistory = this.options.chronicle ? await this.options.chronicle.load(this.options.sessionId) : [];
+    const tempSessionId = `${this.options.sessionId}-temp-${Date.now()}`;
+    if (this.options.chronicle) {
+      if (this.options.chronicle.overwrite) {
+        await this.options.chronicle.overwrite(tempSessionId, startingHistory);
+      } else {
+        await this.options.chronicle.append(tempSessionId, startingHistory);
+      }
+    }
+
     const observations: AgentObservation[] = [];
     const maxSteps = this.options.maxSteps ?? 10;
     const runes = this.options.runes.describe().map((r) => ({ name: r.name, description: r.description, inputSchema: r.inputSchema }));
@@ -78,7 +87,7 @@ export class AgentLoop {
         turnRequest = {
           prompt: this.buildFirstTurnPrompt(objective, runes),
           workspace: this.options.workspace,
-          sessionId: this.options.sessionId,
+          sessionId: tempSessionId,
           tools: runes
         };
       } else if (lastToolCall) {
@@ -93,7 +102,7 @@ export class AgentLoop {
             createdAt: new Date()
           },
           workspace: this.options.workspace,
-          sessionId: this.options.sessionId,
+          sessionId: tempSessionId,
           tools: runes
         };
       } else {
@@ -101,7 +110,7 @@ export class AgentLoop {
         turnRequest = {
           prompt: `Observation: ${JSON.stringify(prev.output ?? prev.error)}`,
           workspace: this.options.workspace,
-          sessionId: this.options.sessionId,
+          sessionId: tempSessionId,
           tools: runes
         };
       }
@@ -166,7 +175,7 @@ export class AgentLoop {
           try {
             output = await this.options.runes.invoke(rune, input, {
               workspace: branchDir,
-              sessionId: this.options.sessionId,
+              sessionId: tempSessionId,
               audit: this.options.audit ?? true
             });
             await mergeWorkspaceBranch(this.options.workspace, branchId);
@@ -176,7 +185,7 @@ export class AgentLoop {
         } else {
           output = await this.options.runes.invoke(rune, input, {
             workspace: this.options.workspace,
-            sessionId: this.options.sessionId,
+            sessionId: tempSessionId,
             audit: this.options.audit ?? true
           });
         }
@@ -205,7 +214,7 @@ export class AgentLoop {
     const final = await this.options.sovereign.run({
       prompt: `Objective: ${objective}\n\nBased on the execution history, provide the final conversational answer to the user. Do NOT use the ReAct format (Thought/Action/Input) here; respond directly to the user.`,
       workspace: this.options.workspace,
-      sessionId: this.options.sessionId,
+      sessionId: tempSessionId,
       ...(onText ? { onText } : {})
     });
 
@@ -225,6 +234,10 @@ export class AgentLoop {
         userObjectiveMessage,
         finalAssistantMessage
       ]);
+    }
+
+    if (this.options.chronicle && this.options.chronicle.delete) {
+      await this.options.chronicle.delete(tempSessionId);
     }
 
     return { plan, observations, final };

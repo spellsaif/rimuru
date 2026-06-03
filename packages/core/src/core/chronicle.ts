@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile, writeFile, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { Chronicle, Message } from "./types.js";
 
@@ -16,6 +16,10 @@ export class MemoryChronicle implements Chronicle {
 
   async overwrite(sessionId: string, messages: readonly Message[]): Promise<void> {
     this.#sessions.set(sessionId, [...messages]);
+  }
+
+  async delete(sessionId: string): Promise<void> {
+    this.#sessions.delete(sessionId);
   }
 }
 
@@ -53,6 +57,13 @@ export class JsonChronicle implements Chronicle {
     
     const content = messages.map(m => JSON.stringify(serializeMessage(m))).join("\n") + "\n";
     await writeFile(path, content, "utf8");
+  }
+
+  async delete(sessionId: string): Promise<void> {
+    const path = this.pathFor(sessionId);
+    try {
+      await rm(path, { force: true });
+    } catch {}
   }
 
   async listSessions(): Promise<readonly string[]> {
