@@ -7,7 +7,7 @@
     / __ \/  _/  |/  / __ / / / / / / 
    / /_/ // // /|_/ / /_/ / / / / / /  
   / _, _// // /  / / _, _/ /_/ /_/ /   
-  /_/ |_/___/_/  /_/_/ |_|\____/\____/ 
+ /_/ |_/___/_/  /_/_/ |_|\____/\____/ 
                                        
 ```
 
@@ -17,23 +17,23 @@ Unlike modern AI solutions that force you into *digital feudalism*—streaming y
 
 ---
 
-## 🏛️ I. The Philosophy of Rimuru
+## 🏛️ I. Architectural Pillars
 
-### 1. Zero-Trust Autonomous Sovereignty
-The AI model is a guest in your workspace. Rimuru enforces a strict isolation boundary between the model's desires and your physical operating system. Every filesystem read/write, terminal command, or network query must be explicitly permitted by user-defined constraints.
+### 1. Zero-Trust Autonomous Containment
+The AI model is a guest in your workspace. Rimuru enforces a strict isolation boundary between the model's desires and your physical operating system. Every filesystem read/write, terminal command, or network query must be explicitly permitted by user-defined constraints and executed in isolated sandboxes (QuickJS WebAssembly VM, WASI process containment).
 
-### 2. Radical Observability (The Flow)
-Rimuru records every thought, planning step, execution command, and tool observation into an immutable event stream called the **Flow**. Trust, but verify: the Flow provides a perfect, tamper-proof audit trail of everything the AI does in your workspace.
+### 2. Speculative Timeline Branching (CoW)
+Instead of executing mutating actions blindly, Rimuru spawns lightweight **copy-on-write (CoW) workspace branches** in milliseconds. Speculative runners test modifications, verify compilation and test suites, and merge changes back to the master branch *only* upon successful validation.
 
-### 3. Local-First Memory & Vault
-Your conversation histories (**Chronicles**) and semantic databases are indexed and queried locally. All API tokens and environment secrets are encrypted on-disk using AES-256-GCM via the **Vault**, remaining completely blind to the LLM shard.
+### 3. Dynamic Tool Synthesis Engine
+Faced with complex operations, Rimuru dynamically designs, compiles, and loads its own local tools (Runes). It transpiles TypeScript programmatically or compiles Rust source code to `.wasm` binaries targetting `wasm32-wasip1`, loading and executing them safely in a sandboxed WASI environment.
 
-### 4. Event-Driven Autonomy (Circles)
-Rimuru acts as a background sovereign node. Through standardized bridges called **Circles**, Rimuru connects to chat channels (Slack, Discord, Telegram, WhatsApp) and webhooks to process events asynchronously, planning and executing tasks on the fly while retaining local boundaries.
+### 4. OS Keychain & Cryptographic Vault
+Credentials remain strictly invisible to the LLM. Rimuru stores keys encrypted with AES-256-GCM, automatically query-binding decryption keys from your OS secure keychain via Linux `secret-tool` / dbus-keyrings, removing fallback risks.
 
 ---
 
-## 🏗️ II. Architecture Blueprint
+## 🏗️ II. System Architecture Blueprint
 
 ```ascii
 ┌─────────────────────────────────────────────────────────────┐
@@ -86,24 +86,12 @@ Rimuru acts as a background sovereign node. Through standardized bridges called 
 
 ---
 
-## ⚡ IV. Key Features & Hardened Security
+## 🛡️ IV. Hardened Security & Optimization
 
-### 🛡️ Tiered Zero-Trust Sandboxing
-Rimuru implements multi-layer isolation boundaries to execute untrusted code safely:
-1. **QuickJS WebAssembly VM**: Dynamic JS Runes generated at runtime are executed within a secure, in-process WebAssembly Virtual Machine. It isolates memory heap allocations, limits recursion, and prevents variables from leaking.
-2. **WASI Sandbox**: High-risk system binaries are run as precompiled `.wasm` modules using Node's `node:wasi` library, strictly virtualizing directory mappings.
-3. **Path-Level Restraints**: Path validation rejects any operations pointing outside the active workspace directory, keeping files in `.rimuru/` and system roots completely protected.
-
-### 🗳️ Consensus Permission Validation
-High-risk tools (Runes) must be validated against a threshold-based **Consensus Gating Policy**. Rimuru routes permission queries to multiple voters (such as static lists, rule auditors, and LLM safety filters) and only grants execution if a consensus threshold is met.
-
-### 🌀 Asynchronous Event-Driven Circles
-Webhooks from Slack, Telegram, and Discord are processed asynchronously using an **Ingest-and-Defer** pattern:
-- The Gate server immediately acknowledges inbound events with a `202 Accepted` response.
-- The reasoning loop executes in the background.
-- Upon completion, the result is pushed back to the platform using the adapter's outgoing `send()` API.
-- All webhooks are cryptographically authenticated via Slack HMAC-SHA256 signature verification and Discord Ed25519 public key verification.
-- Senders are partitioned into isolated user/channel-specific dynamic sessions to avoid context leaks.
+* **WASI Output Redirection**: Captures and routes standard output/standard error for custom compiled WASI `.wasm` tools via temporary file descriptor redirection.
+* **Fail-Closed Gatekeeper**: All circle webhook endpoints enforce mandatory HMAC-SHA256 (Slack) and Ed25519 (Discord) signature verification, failing secure with `401 Unauthorized` if validation keys are missing.
+* **Context Cache Optimization**: The agent reasoning engine maintains continuous, stateful execution sessions, avoiding token scaling and maximizing LLM prompt-caching.
+* **Longest Common Subsequence (LCS) Diff**: Computes and previews workspace edits with Myers-style LCS DP diffing to prevent line-shift cascades.
 
 ---
 
@@ -129,7 +117,7 @@ Initialize your local workspace using the interactive setup wizard:
 # Runs the interactive onboarding wizard
 pnpm --filter @rimuru/cli dev setup --wizard
 ```
-The wizard will help you configure your preferred **LLM Shard**, choose your sandbox **Barrier**, select your permission **Vows**, and automatically write the config to `rimuru.config.json`.
+The wizard configures your **LLM Shard**, choose your sandbox **Barrier**, select your permission **Vows**, and automatically writes the config to `rimuru.config.json`.
 
 ### 🔑 3. Fortifying the Vault
 
@@ -149,48 +137,33 @@ pnpm rimuru vault list
 ## 💬 VI. Usage & Interactive Interfaces
 
 ### 🖥️ 1. The OpenTUI Terminal Chat Interface
-Rimuru features a state-of-the-art terminal user interface built with the high-performance **OpenTUI** layout engine. It renders a clean split-pane window, syntax-highlighted markdown chat history, real-time reasoning loops, and an **Events HUD** visualizing internal telemetry.
-
-To start the TUI:
+Start the split-pane terminal client:
 ```bash
 # Launches the TUI chat interface
 pnpm rimuru chat
 ```
 
-> [!TIP]
-> The TUI leverages OpenTUI's native Zig rendering core. Under Node.js, the CLI will automatically search for `bun` on your path and seamlessly respawn itself to execute natively at 30+ FPS!
-
 ### 🌍 2. The Web Visual Canvas
-If you prefer a graphic layout, start the web interface to display a split-pane coding dashboard. The panel on the right features an **Interactive Canvas iframe** that automatically renders HTML/CSS/JS files built by the agent, allowing you to preview code in real time:
-
+Access the graphical canvas panel with iframe live previews at `http://localhost:19711`:
 ```bash
 # Start Turborepo dev servers
 pnpm dev
-# Open http://localhost:19711 to access the web panel
 ```
 
 ### 🔌 3. Dynamic Webhook Integrations
-To listen to external platforms, start the Gate gateway server and configure your webhook endpoints:
-
 ```bash
 # Start the HTTP/SSE Gateway server
 pnpm --filter @rimuru/cli dev gate start
 ```
 
-Webhooks will route requests through the following paths:
-*   **Slack Webhook**: `POST /circles/<circle-name>/slack`
-*   **Telegram Webhook**: `POST /circles/<circle-name>/telegram`
-*   **Discord Webhook**: `POST /circles/<circle-name>/discord`
-*   **Generic Webhook**: `POST /circles/<circle-name>/message`
-
 ---
 
 ## 🧪 VII. Testing
 
-Rimuru runs a test suite under Vitest validating sandbox containment, consensus gating, dynamic runes, and webhook signature verification:
+Run all unit and integration tests (including sandboxes and compilations):
 
 ```bash
-# Run all unit tests
+# Run the Vitest suite
 pnpm test
 ```
 
@@ -199,5 +172,3 @@ pnpm test
 ## 📜 VIII. License
 
 Distributed under the MIT License. Built for the liberation of the digital individual.
-
-**"The Sovereign man owns his tools. The Sovereign man owns his data. The Sovereign man owns his future."**
