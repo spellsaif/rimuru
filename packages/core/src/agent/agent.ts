@@ -1,6 +1,6 @@
 import type { RuneRegistry } from "../core/runes.js";
 import type { Sovereign } from "../core/sovereign.js";
-import type { RunResult, Flow } from "../core/types.js";
+import type { RunResult, Flow, Chronicle, Message } from "../core/types.js";
 import { FlowBus } from "../core/events.js";
 import { planObjective, type Plan } from "../planner/planner.js";
 import { createWorkspaceBranch, deleteWorkspaceBranch, mergeWorkspaceBranch } from "../security/branch.js";
@@ -30,6 +30,7 @@ export class AgentLoop {
     readonly maxSteps?: number;
     readonly audit?: boolean;
     readonly flowBus?: FlowBus;
+    readonly chronicle?: Chronicle;
   }) {}
 
 
@@ -38,6 +39,7 @@ export class AgentLoop {
    * Runs a dynamic ReAct (Reason+Act) loop to solve the objective.
    */
   async run(objective: string, onText?: (text: string) => void): Promise<AgentRunResult> {
+    const startingHistory = this.options.chronicle ? await this.options.chronicle.load(this.options.sessionId) : [];
     const observations: AgentObservation[] = [];
     const maxSteps = this.options.maxSteps ?? 10;
     const runes = this.options.runes.describe().map((r) => ({ name: r.name, description: r.description, inputSchema: r.inputSchema }));
@@ -177,11 +179,29 @@ export class AgentLoop {
 
     // Final synthesis
     const final = await this.options.sovereign.run({
-      prompt: `Objective: ${objective}\n\nBased on the execution history, provide the final answer to the user.`,
+      prompt: `Objective: ${objective}\n\nBased on the execution history, provide the final conversational answer to the user. Do NOT use the ReAct format (Thought/Action/Input) here; respond directly to the user.`,
       workspace: this.options.workspace,
       sessionId: this.options.sessionId,
       ...(onText ? { onText } : {})
     });
+
+    if (this.options.chronicle && this.options.chronicle.overwrite) {
+      const userObjectiveMessage: Message = {
+        role: "user",
+        content: objective,
+        createdAt: new Date()
+      };
+      const finalAssistantMessage: Message = {
+        role: "assistant",
+        content: final.response.content,
+        createdAt: new Date()
+      };
+      await this.options.chronicle.overwrite(this.options.sessionId, [
+        ...startingHistory,
+        userObjectiveMessage,
+        finalAssistantMessage
+      ]);
+    }
 
     return { plan, observations, final };
   }

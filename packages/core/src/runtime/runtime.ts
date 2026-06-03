@@ -173,7 +173,8 @@ export async function runAgentTurn(options: AgentTurnOptions): Promise<AgentRunR
     workspace: options.workspace, 
     sessionId, 
     audit: true,
-    flowBus: options.flowBus 
+    flowBus: options.flowBus,
+    chronicle: runtime.chronicle
   });
 
   const result = await loop.run(options.objective, options.onText);

@@ -13,6 +13,10 @@ export class MemoryChronicle implements Chronicle {
     const current = this.#sessions.get(sessionId) ?? [];
     this.#sessions.set(sessionId, [...current, ...messages]);
   }
+
+  async overwrite(sessionId: string, messages: readonly Message[]): Promise<void> {
+    this.#sessions.set(sessionId, [...messages]);
+  }
 }
 
 /**
@@ -41,6 +45,14 @@ export class JsonChronicle implements Chronicle {
     
     const lines = messages.map(m => JSON.stringify(serializeMessage(m))).join("\n") + "\n";
     await appendFile(path, lines, "utf8");
+  }
+
+  async overwrite(sessionId: string, messages: readonly Message[]): Promise<void> {
+    const path = this.pathFor(sessionId);
+    await mkdir(dirname(path), { recursive: true });
+    
+    const content = messages.map(m => JSON.stringify(serializeMessage(m))).join("\n") + "\n";
+    await writeFile(path, content, "utf8");
   }
 
   async listSessions(): Promise<readonly string[]> {

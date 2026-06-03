@@ -120,7 +120,8 @@ const TuiApp = ({ options }: { options: InteractiveTuiOptions }) => {
         workspace: options.workspace,
         sessionId: options.sessionId,
         flowBus: options.flowBus,
-        audit: true
+        audit: true,
+        chronicle: options.chronicle
       });
       await loop.run(prompt, (text) => {
         currentContent += text;
