@@ -3,6 +3,7 @@ import type { Sovereign } from "../core/sovereign.js";
 import type { RunResult, Flow } from "../core/types.js";
 import { FlowBus } from "../core/events.js";
 import { planObjective, type Plan } from "../planner/planner.js";
+import { createWorkspaceBranch, deleteWorkspaceBranch, mergeWorkspaceBranch } from "../security/branch.js";
 
 
 export interface AgentObservation {
@@ -43,16 +44,64 @@ export class AgentLoop {
 
     let currentStatus = "working";
 
-    for (let step = 1; step <= maxSteps; step++) {
-      const prompt = this.buildReActPrompt(objective, observations, runes);
-      
-      const turn = await this.options.sovereign.run({
-        prompt,
-        workspace: this.options.workspace,
-        sessionId: `${this.options.sessionId}:step-${step}`
-      });
+    let lastToolCall: { id: string; name: string } | undefined;
 
-      const thoughtProcess = parseAction(turn.response.content);
+    for (let step = 1; step <= maxSteps; step++) {
+      let turnRequest: any;
+      if (step === 1) {
+        turnRequest = {
+          prompt: this.buildFirstTurnPrompt(objective, runes),
+          workspace: this.options.workspace,
+          sessionId: this.options.sessionId,
+          tools: runes
+        };
+      } else if (lastToolCall) {
+        const prev = observations[observations.length - 1]!;
+        const content = typeof prev.output === "string" ? prev.output : JSON.stringify(prev.output ?? prev.error);
+        turnRequest = {
+          promptMessage: {
+            role: "tool",
+            name: lastToolCall.name,
+            toolCallId: lastToolCall.id,
+            content,
+            createdAt: new Date()
+          },
+          workspace: this.options.workspace,
+          sessionId: this.options.sessionId,
+          tools: runes
+        };
+      } else {
+        const prev = observations[observations.length - 1]!;
+        turnRequest = {
+          prompt: `Observation: ${JSON.stringify(prev.output ?? prev.error)}`,
+          workspace: this.options.workspace,
+          sessionId: this.options.sessionId,
+          tools: runes
+        };
+      }
+      
+      const turn = await this.options.sovereign.run(turnRequest);
+
+      let thoughtProcess: { type: "call" | "finish"; thought: string; rune?: string; input?: unknown } | undefined;
+      lastToolCall = undefined;
+
+      if (turn.response.toolCalls && turn.response.toolCalls.length > 0) {
+        const tc = turn.response.toolCalls[0]!;
+        lastToolCall = { id: tc.id, name: tc.name };
+        if (tc.name === "finish") {
+          thoughtProcess = { type: "finish", thought: turn.response.content || "Finished task" };
+        } else {
+          thoughtProcess = {
+            type: "call",
+            thought: turn.response.content || `Calling tool ${tc.name}`,
+            rune: tc.name,
+            input: tc.arguments
+          };
+        }
+      } else {
+        thoughtProcess = parseAction(turn.response.content);
+      }
+
       if (thoughtProcess?.thought) {
         this.options.flowBus?.emit({ type: "thought.emitted", thought: thoughtProcess.thought, at: new Date() });
       }
@@ -79,13 +128,32 @@ export class AgentLoop {
       let output: unknown;
       let error: string | undefined;
 
+      const runeMeta = this.options.runes.describe().find((r) => r.name === rune);
+      const isMutative = runeMeta && (runeMeta.risk === "write" || runeMeta.risk === "execute");
+
       try {
         if (!rune) throw new Error("No rune specified in action");
-        output = await this.options.runes.invoke(rune, input, {
-          workspace: this.options.workspace,
-          sessionId: this.options.sessionId,
-          audit: this.options.audit ?? true
-        });
+
+        if (isMutative) {
+          const branchId = `${this.options.sessionId}-step-${step}`;
+          const branchDir = await createWorkspaceBranch(this.options.workspace, branchId);
+          try {
+            output = await this.options.runes.invoke(rune, input, {
+              workspace: branchDir,
+              sessionId: this.options.sessionId,
+              audit: this.options.audit ?? true
+            });
+            await mergeWorkspaceBranch(this.options.workspace, branchId);
+          } finally {
+            await deleteWorkspaceBranch(this.options.workspace, branchId);
+          }
+        } else {
+          output = await this.options.runes.invoke(rune, input, {
+            workspace: this.options.workspace,
+            sessionId: this.options.sessionId,
+            audit: this.options.audit ?? true
+          });
+        }
       } catch (e) {
         error = e instanceof Error ? e.message : String(e);
       }
@@ -109,7 +177,7 @@ export class AgentLoop {
 
     // Final synthesis
     const final = await this.options.sovereign.run({
-      prompt: `Objective: ${objective}\n\nHistory of thoughts and tool outputs:\n${JSON.stringify(observations, null, 2)}\n\nBased on the above, provide the final answer to the user.`,
+      prompt: `Objective: ${objective}\n\nBased on the execution history, provide the final answer to the user.`,
       workspace: this.options.workspace,
       sessionId: this.options.sessionId,
       ...(onText ? { onText } : {})
@@ -118,7 +186,7 @@ export class AgentLoop {
     return { plan, observations, final };
   }
 
-  private buildReActPrompt(objective: string, history: readonly AgentObservation[], runes: unknown[]): string {
+  private buildFirstTurnPrompt(objective: string, runes: unknown[]): string {
     return [
       `You are an AI Agent working toward this objective: "${objective}"`,
       "Use the following ReAct loop format:",
@@ -128,10 +196,7 @@ export class AgentLoop {
       "",
       `Available Runes: ${JSON.stringify(runes, null, 2)}`,
       "",
-      "Past Observations:",
-      history.map(o => `Step ${o.step}: Thought: ${o.thought}\nAction: ${o.rune}\nInput: ${JSON.stringify(o.input)}\nOutput: ${JSON.stringify(o.output ?? o.error)}`).join("\n---\n"),
-      "",
-      "Current Thought and Action:"
+      "Please output your first Thought, Action, and Input."
     ].join("\n");
   }
 }
