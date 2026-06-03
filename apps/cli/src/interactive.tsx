@@ -79,6 +79,7 @@ const TuiApp = ({ options }: { options: InteractiveTuiOptions }) => {
   const [inputText, setInputText] = useState("");
   const [isThinking, setIsThinking] = useState(false);
   const [activeRune, setActiveRune] = useState<string | undefined>();
+  const [scrollOffset, setScrollOffset] = useState(0);
   const { exit } = useApp();
 
   useEffect(() => {
@@ -93,56 +94,6 @@ const TuiApp = ({ options }: { options: InteractiveTuiOptions }) => {
     });
     return () => unlisten();
   }, [options.flowBus]);
-
-  useInput((input, key) => {
-    if (key.ctrl && input === "c") {
-      exit();
-    }
-  });
-
-  const handleSubmit = async () => {
-    const prompt = inputText.trim();
-    if (!prompt || isThinking) return;
-
-    setInputText("");
-    setIsThinking(true);
-
-    const userMsg = { role: "user" as const, content: prompt };
-    const assistantMsg = { role: "assistant" as const, content: "" };
-    
-    setTranscript((prev) => [...prev, userMsg, assistantMsg]);
-
-    try {
-      let currentContent = "";
-      const loop = new AgentLoop({
-        sovereign: options.sovereign,
-        runes: options.runes,
-        workspace: options.workspace,
-        sessionId: options.sessionId,
-        flowBus: options.flowBus,
-        audit: true,
-        chronicle: options.chronicle
-      });
-      await loop.run(prompt, (text) => {
-        currentContent += text;
-        setTranscript((prev) => {
-          const next = [...prev];
-          if (next.length > 0) {
-            next[next.length - 1] = { role: "assistant" as const, content: currentContent };
-          }
-          return next;
-        });
-      });
-    } catch (e: any) {
-      const errorMsg = e instanceof Error ? e.message : String(e);
-      setTranscript((prev) => [
-        ...prev,
-        { role: "system" as const, content: `❌ Error: ${errorMsg}` }
-      ]);
-    } finally {
-      setIsThinking(false);
-    }
-  };
 
   // Outer dimensions
   const outerWidth = Math.max(40, columns - 2);
@@ -164,46 +115,167 @@ const TuiApp = ({ options }: { options: InteractiveTuiOptions }) => {
   // Transcript slice logic
   // Estimate ~3.5 lines per message (header + content + spacing)
   const maxMessages = Math.max(3, Math.floor(mainHeight / 3.5));
-  const visibleTranscript = transcript.slice(-maxMessages);
+
+  useInput((input, key) => {
+    if (key.ctrl && input === "c") {
+      exit();
+    }
+    if (key.upArrow) {
+      setScrollOffset((prev) => Math.max(0, prev - 1));
+    }
+    if (key.downArrow) {
+      setScrollOffset((prev) =>
+        Math.min(Math.max(0, transcript.length - maxMessages), prev + 1)
+      );
+    }
+  });
+
+  const handleSubmit = async () => {
+    const prompt = inputText.trim();
+    if (!prompt || isThinking) return;
+
+    setInputText("");
+    setIsThinking(true);
+
+    const userMsg = { role: "user" as const, content: prompt };
+    const assistantMsg = { role: "assistant" as const, content: "" };
+    
+    setTranscript((prev) => {
+      const next = [...prev, userMsg, assistantMsg];
+      setScrollOffset(Math.max(0, next.length - maxMessages));
+      return next;
+    });
+
+    try {
+      let currentContent = "";
+      const loop = new AgentLoop({
+        sovereign: options.sovereign,
+        runes: options.runes,
+        workspace: options.workspace,
+        sessionId: options.sessionId,
+        flowBus: options.flowBus,
+        audit: true,
+        chronicle: options.chronicle
+      });
+      await loop.run(prompt, (text) => {
+        currentContent += text;
+        setTranscript((prev) => {
+          const next = [...prev];
+          if (next.length > 0) {
+            next[next.length - 1] = { role: "assistant" as const, content: currentContent };
+          }
+          setScrollOffset(Math.max(0, next.length - maxMessages));
+          return next;
+        });
+      });
+    } catch (e: any) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      setTranscript((prev) => {
+        const next = [
+          ...prev,
+          { role: "system" as const, content: `❌ Error: ${errorMsg}` }
+        ];
+        setScrollOffset(Math.max(0, next.length - maxMessages));
+        return next;
+      });
+    } finally {
+      setIsThinking(false);
+    }
+  };
+
+  const visibleTranscript = transcript.slice(scrollOffset, scrollOffset + maxMessages);
 
   // Fit events inside the events panel height (accounting for header & padding)
   const maxEvents = Math.max(2, mainHeight - 4);
   const visibleEvents = events.slice(-maxEvents);
 
+  const showScrollUp = scrollOffset > 0;
+  const showScrollDown = scrollOffset < transcript.length - maxMessages;
+
+  const formatMessageContent = (content: string, isThinkingMessage: boolean) => {
+    if (!content) {
+      return isThinkingMessage ? (
+        <Text color="yellow" italic>Thinking...</Text>
+      ) : (
+        <Text color="gray" italic>(no response)</Text>
+      );
+    }
+    const lines = content.split("\n");
+    return (
+      <Box flexDirection="column">
+        {lines.map((line, idx) => {
+          const cleanLine = line.replace(/\u001b\[[0-9;]*m/g, "").trim();
+          if (cleanLine.startsWith("Thought:")) {
+            return (
+              <Text key={idx} color="gray" italic>
+                🧠 {cleanLine.slice(8).trim()}
+              </Text>
+            );
+          }
+          if (cleanLine.startsWith("Invoke:")) {
+            return (
+              <Text key={idx} color="cyan" bold>
+                ⚡ {cleanLine.slice(7).trim()}
+              </Text>
+            );
+          }
+          return <Text key={idx} color="white">{line}</Text>;
+        })}
+      </Box>
+    );
+  };
+
   return (
-    <Box flexDirection="column" width={outerWidth} height={outerHeight} borderStyle="single" borderColor="cyan" padding={1}>
+    <Box flexDirection="column" width={outerWidth} height={outerHeight} borderStyle="single" borderColor="magenta" padding={1}>
       {/* Title Bar */}
       <Box justifyContent="center" marginBottom={1}>
-        <Text bold color="cyan">🌌 RIMURU SOVEREIGN SESSIONS 🌌</Text>
+        <Text bold color="magenta">🌌 RIMURU SOVEREIGN TERMINAL 🌌</Text>
       </Box>
       <Box justifyContent="space-between" marginBottom={1}>
-        <Text gray>Session: {options.sessionId}</Text>
-        <Text gray>Model: {options.model} ({options.provider})</Text>
+        <Text gray>Session: <Text color="white" bold>{options.sessionId}</Text></Text>
+        <Text gray>Model: <Text color="yellow" bold>{options.model}</Text> (<Text color="cyan">{options.provider}</Text>)</Text>
       </Box>
 
       {/* Main Area (Split Chat & Events) */}
       <Box flexDirection="row" height={mainHeight} marginBottom={1}>
         {/* Chat History Panel */}
-        <Box flexDirection="column" width={chatWidth} borderStyle="round" borderColor="gray" padding={1} marginRight={2}>
+        <Box flexDirection="column" width={chatWidth} borderStyle="round" borderColor="emerald" padding={1} marginRight={2}>
           <Box marginBottom={1}>
-            <Text bold color="white">💬 CONVERSATION</Text>
+            <Text bold color="emerald">💬 CONVERSATION HUB</Text>
           </Box>
           <Box flexDirection="column" flexGrow={1}>
+            {showScrollUp && (
+              <Box alignSelf="center" marginBottom={1}>
+                <Text color="cyan" bold>▲ {scrollOffset} older messages (Press Up Arrow) ▲</Text>
+              </Box>
+            )}
+            
             {transcript.length === 0 ? (
               <Text gray italic>Ask Rimuru a question to start the conversation...</Text>
             ) : (
               visibleTranscript.map((msg, idx) => {
                 const isUser = msg.role === "user";
                 const isSystem = msg.role === "system";
-                const roleLabel = isUser ? "👤 YOU" : isSystem ? "⚠️ SYSTEM" : "🌌 RIMURU";
-                const roleColor = isUser ? "green" : isSystem ? "red" : "cyan";
+                const roleLabel = isUser ? "👤 YOU" : isSystem ? "🚨 SYSTEM" : "✨ RIMURU";
+                const roleColor = isUser ? "green" : isSystem ? "red" : "magenta";
+                const isThinkingMessage = isThinking && (scrollOffset + idx) === transcript.length - 1;
                 return (
                   <Box key={idx} flexDirection="column" marginBottom={1}>
                     <Text bold color={roleColor}>{roleLabel}:</Text>
-                    <Text>{msg.content || (isThinking && idx === transcript.length - 1 ? "thinking..." : "")}</Text>
+                    {isUser ? (
+                      <Text color="white">{msg.content}</Text>
+                    ) : (
+                      formatMessageContent(msg.content, isThinkingMessage)
+                    )}
                   </Box>
                 );
               })
+            )}
+
+            {showScrollDown && (
+              <Box alignSelf="center" marginTop={1}>
+                <Text color="cyan" bold>▼ {transcript.length - maxMessages - scrollOffset} newer messages (Press Down Arrow) ▼</Text>
+              </Box>
             )}
           </Box>
         </Box>
@@ -211,8 +283,18 @@ const TuiApp = ({ options }: { options: InteractiveTuiOptions }) => {
         {/* Telemetry Events Panel */}
         <Box flexDirection="column" width={telemetryWidth} borderStyle="round" borderColor="yellow" padding={1}>
           <Box marginBottom={1}>
-            <Text bold color="yellow">⚡ EVENTS HUD</Text>
+            <Text bold color="yellow">📡 TELEMETRY HUB</Text>
           </Box>
+          
+          {/* Diagnostic Stats */}
+          <Box flexDirection="column" marginBottom={1}>
+            <Text gray>Status: {isThinking ? <Text color="yellow" bold>● THINKING</Text> : <Text color="green" bold>○ IDLE</Text>}</Text>
+            <Text gray>Runes: <Text color="cyan">{options.runes.list().length} loaded</Text></Text>
+            {activeRune && <Text gray>Running: <Text color="magenta" bold>{activeRune}</Text></Text>}
+          </Box>
+          
+          <Box borderStyle="single" borderColor="gray" borderDim={true} marginBottom={1} />
+
           <Box flexDirection="column" flexGrow={1}>
             {events.length === 0 ? (
               <Text gray italic>No events recorded yet.</Text>
@@ -220,20 +302,26 @@ const TuiApp = ({ options }: { options: InteractiveTuiOptions }) => {
               visibleEvents.map((e, idx) => {
                 const type = e.type.split(".")[1] || e.type;
                 let icon = "•";
-                if (e.type.startsWith("rune.")) icon = "⚡";
-                else if (e.type.startsWith("run.")) icon = "🌀";
-                else if (e.type === "thought.emitted") icon = "🧠";
+                let labelColor = "gray";
+                if (e.type.startsWith("rune.")) {
+                  icon = "⚡";
+                  labelColor = "magenta";
+                } else if (e.type.startsWith("run.")) {
+                  icon = "🌀";
+                  labelColor = "green";
+                } else if (e.type === "thought.emitted") {
+                  icon = "🧠";
+                  labelColor = "yellow";
+                } else if (e.type.startsWith("provider.")) {
+                  icon = "📡";
+                  labelColor = "cyan";
+                }
                 return (
                   <Text key={idx} wrap="truncate-end">
-                    <Text color="yellow">{icon}</Text> {type.toUpperCase()}
+                    <Text color={labelColor}>{icon} {type.toUpperCase()}</Text>
                   </Text>
                 );
               })
-            )}
-            {activeRune && (
-              <Box marginTop={1}>
-                <Text bold color="magenta">Active: {activeRune}</Text>
-              </Box>
             )}
           </Box>
         </Box>
@@ -255,8 +343,8 @@ const TuiApp = ({ options }: { options: InteractiveTuiOptions }) => {
         </Box>
       </Box>
       
-      <Box marginTop={1}>
-        <Text gray italic>Press Ctrl+C to exit.</Text>
+      <Box marginTop={1} justifyContent="center">
+        <Text gray italic>Ctrl+C Exit | Up/Down Arrow Scroll | Enter Submit</Text>
       </Box>
     </Box>
   );
