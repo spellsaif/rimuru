@@ -156,31 +156,33 @@ export const workspaceRune: Rune<{ readonly question: string }, { readonly answe
   }
 };
 
-function validateSchema(schema: RuneSchema | undefined, value: unknown, prefix: string): void {
-  if (!schema) return;
-  let zodSchema: z.ZodType<any> = z.any();
-  if (schema.type === "object") {
+function buildZodSchema(schema: any): z.ZodType<any> {
+  if (!schema) return z.any();
+  if (schema.type === "array") {
+    return z.array(z.any());
+  } else if (schema.type === "boolean") {
+    return z.boolean();
+  } else if (schema.type === "number") {
+    return z.number();
+  } else if (schema.type === "string") {
+    return z.string();
+  } else if (schema.type === "object") {
     const shape: Record<string, z.ZodType<any>> = {};
     for (const [key, prop] of Object.entries(schema.properties ?? {})) {
-      let fieldSchema: z.ZodType<any>;
-      if (prop.type === "array") {
-        fieldSchema = z.array(z.any());
-      } else if (prop.type === "boolean") {
-        fieldSchema = z.boolean();
-      } else if (prop.type === "number") {
-        fieldSchema = z.number();
-      } else if (prop.type === "string") {
-        fieldSchema = z.string();
-      } else {
-        fieldSchema = z.any();
-      }
+      let fieldSchema = buildZodSchema(prop);
       if (!schema.required?.includes(key)) {
         fieldSchema = fieldSchema.optional();
       }
       shape[key] = fieldSchema;
     }
-    zodSchema = z.object(shape);
+    return z.object(shape);
   }
+  return z.any();
+}
+
+function validateSchema(schema: RuneSchema | undefined, value: unknown, prefix: string): void {
+  if (!schema) return;
+  const zodSchema = buildZodSchema(schema);
   const result = zodSchema.safeParse(value);
   if (!result.success) {
     throw new Error(`${prefix}: ${result.error.issues.map((e: any) => `${e.path.join(".")}: ${e.message}`).join(", ")}`);
