@@ -138,13 +138,18 @@ export async function discoverSandboxedRunes(workspace: string): Promise<readonl
             outputSchema: config.outputSchema,
             async invoke(input, context) {
               const { runSandboxedCommand } = await import("../security/sandbox.js");
-              const args: string[] = typeof input === "object" && input !== null ? Object.values(input).map(String) : [];
+              const jsonInput = JSON.stringify(input);
               const result = await runSandboxedCommand({
                 command: join(runesDir, nameWithoutExt),
-                args,
-                workspace: context.workspace
+                workspace: context.workspace,
+                stdin: jsonInput
               }, "wasi");
-              return result.stdout || result.stderr || "WASI execution completed";
+              const stdoutTrimmed = (result.stdout || "").trim();
+              try {
+                return JSON.parse(stdoutTrimmed);
+              } catch {
+                return stdoutTrimmed || result.stderr || "WASI execution completed";
+              }
             }
           };
           runes.push(rune);
