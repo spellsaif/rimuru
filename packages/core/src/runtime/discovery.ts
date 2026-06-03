@@ -120,7 +120,36 @@ export async function discoverSandboxedRunes(workspace: string): Promise<readonl
           };
           runes.push(rune);
         } catch (error) {
-          console.warn(`[discovery] Failed to load sandboxed Rune from ${entry.name}:`, error);
+          console.warn(`[discovery] Failed to load sandboxed JS Rune from ${entry.name}:`, error);
+        }
+      } else if (entry.isFile() && entry.name.endsWith(".wasm")) {
+        const nameWithoutExt = entry.name.slice(0, -5);
+        const jsonPath = join(runesDir, `${nameWithoutExt}.json`);
+
+        try {
+          const jsonContent = await readFile(jsonPath, "utf8");
+          const config = JSON.parse(jsonContent);
+
+          const rune: Rune = {
+            name: config.name || `custom.${nameWithoutExt}`,
+            description: config.description || `Custom WASI sandboxed tool: ${nameWithoutExt}`,
+            risk: (config.risk as RuneRisk) || "execute",
+            inputSchema: config.inputSchema,
+            outputSchema: config.outputSchema,
+            async invoke(input, context) {
+              const { runSandboxedCommand } = await import("../security/sandbox.js");
+              const args: string[] = typeof input === "object" && input !== null ? Object.values(input).map(String) : [];
+              const result = await runSandboxedCommand({
+                command: join(runesDir, nameWithoutExt),
+                args,
+                workspace: context.workspace
+              }, "wasi");
+              return result.stdout || result.stderr || "WASI execution completed";
+            }
+          };
+          runes.push(rune);
+        } catch (error) {
+          console.warn(`[discovery] Failed to load sandboxed WASM Rune from ${entry.name}:`, error);
         }
       }
     }
