@@ -1,4 +1,4 @@
-import type { PermissionDecision, PermissionPolicy, PermissionRequest, RuneRisk } from "./types.js";
+import type { PermissionDecision, PermissionPolicy, PermissionRequest, RuneRisk, Shard } from "./types.js";
 
 export interface StaticPermissionOptions {
   readonly allow?: readonly RuneRisk[];
@@ -84,5 +84,58 @@ export class ConsensusPermissionPolicy implements PermissionPolicy {
       return { allowed: true, reason: `Consensus reached (${approvals}/${this.#voters.length}): ${reasons.join("; ")}` };
     }
     return { allowed: false, reason: `Consensus failed (${approvals}/${this.#requiredApprovals} approvals): ${reasons.join("; ")}` };
+  }
+}
+
+export class ModelVoterPermissionPolicy implements PermissionPolicy {
+  readonly #shard: Shard;
+  readonly #name: string;
+
+  constructor(options: { readonly shard: Shard; readonly name?: string }) {
+    this.#shard = options.shard;
+    this.#name = options.name ?? options.shard.name;
+  }
+
+  async decide(request: PermissionRequest): Promise<PermissionDecision> {
+    if (request.risk === "read") {
+      return { allowed: true, reason: `Model [${this.#name}]: auto-approved read-only risk` };
+    }
+
+    const prompt = [
+      "You are an AI Security Gatekeeper for a local agent workspace.",
+      "Evaluate if the following tool invocation is safe:",
+      `Rune (Tool): ${request.rune}`,
+      `Risk Level: ${request.risk}`,
+      `Input Parameters: ${JSON.stringify(request.input)}`,
+      `Workspace Path: ${request.workspace}`,
+      "",
+      "Reply in exactly the following JSON format:",
+      "{",
+      '  "allowed": true or false,',
+      '  "reason": "Explain your safety analysis briefly"',
+      "}",
+      "Do not include any formatting, markdown blocks, or other text outside the JSON."
+    ].join("\n");
+
+    try {
+      const response = await this.#shard.complete([
+        {
+          role: "user",
+          content: prompt,
+          createdAt: new Date()
+        }
+      ]);
+      const cleanJson = response.content.replace(/```json|```/g, "").trim();
+      const decision = JSON.parse(cleanJson);
+      return {
+        allowed: !!decision.allowed,
+        reason: `Model [${this.#name}]: ${decision.reason || "Voted"}`
+      };
+    } catch (e: any) {
+      return {
+        allowed: false,
+        reason: `Model [${this.#name}] vote failed: ${e.message}`
+      };
+    }
   }
 }

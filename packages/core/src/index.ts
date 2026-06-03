@@ -5,7 +5,7 @@ export { circleByName, getCircleAdapter, listCircles, normalizeLocalCircleMessag
 export { WHATSAPP_ADAPTER } from "./circles/whatsapp.js";
 
 export { JsonChronicle, MemoryChronicle } from "./core/chronicle.js";
-export { ApprovalPermissionPolicy, ConsensusPermissionPolicy, readOnlyPolicy, StaticPermissionPolicy, trustedLocalPolicy } from "./core/permissions.js";
+export { ApprovalPermissionPolicy, ConsensusPermissionPolicy, ModelVoterPermissionPolicy, readOnlyPolicy, StaticPermissionPolicy, trustedLocalPolicy } from "./core/permissions.js";
 export { JsonTraceStore } from "./core/trace.js";
 export { AgentLoop } from "./agent/agent.js";
 export { RuneRegistry, workspaceRune } from "./core/runes.js";
