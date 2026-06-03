@@ -1,4 +1,4 @@
-import type { AssistantResponse, Message, Shard, StreamChunk, TokenUsage } from "../core/types.js";
+import type { AssistantResponse, Message, Shard, StreamChunk, TokenUsage, ShardOptions } from "../core/types.js";
 
 export interface OpenAICompatibleOptions {
   readonly baseUrl: string;
@@ -24,7 +24,7 @@ export class OpenAICompatibleShard implements Shard {
     this.#timeoutMs = options.timeoutMs ?? 60_000;
   }
 
-  async complete(messages: readonly Message[], options?: { readonly signal?: AbortSignal }): Promise<AssistantResponse> {
+  async complete(messages: readonly Message[], options?: ShardOptions): Promise<AssistantResponse> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.#timeoutMs);
     if (options?.signal) options.signal.addEventListener("abort", () => controller.abort());
@@ -59,7 +59,7 @@ export class OpenAICompatibleShard implements Shard {
     }
   }
 
-  async *stream(messages: readonly Message[], options?: { readonly signal?: AbortSignal }): AsyncIterable<StreamChunk> {
+  async *stream(messages: readonly Message[], options?: ShardOptions): AsyncIterable<StreamChunk> {
     const response = await this.#fetchWithRetry(`${this.#baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
