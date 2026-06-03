@@ -1,4 +1,4 @@
-import type { AssistantResponse, Message, Shard, StreamChunk } from "../core/types.js";
+import type { AssistantResponse, Message, Shard, StreamChunk, ShardOptions } from "../core/types.js";
 
 export interface AnthropicOptions {
   readonly apiKey: string;
@@ -21,7 +21,7 @@ export class AnthropicShard implements Shard {
     this.#fetch = options.fetchImpl ?? fetch;
   }
 
-  async complete(messages: readonly Message[]): Promise<AssistantResponse> {
+  async complete(messages: readonly Message[], options?: ShardOptions): Promise<AssistantResponse> {
     const system = messages.find((message) => message.role === "system")?.content;
     const response = await this.#fetch(`${this.#baseUrl}/messages`, {
       method: "POST",
@@ -35,7 +35,8 @@ export class AnthropicShard implements Shard {
         max_tokens: 4096,
         ...(system ? { system } : {}),
         messages: messages.filter((message) => message.role !== "system").map((message) => ({ role: message.role === "assistant" ? "assistant" : "user", content: message.content }))
-      })
+      }),
+      signal: options?.signal
     });
     if (!response.ok) throw new Error(`Anthropic request failed: ${response.status} ${await response.text()}`);
     const payload = (await response.json()) as { readonly content?: readonly { readonly text?: string }[]; readonly usage?: { readonly input_tokens?: number; readonly output_tokens?: number } };
@@ -45,7 +46,7 @@ export class AnthropicShard implements Shard {
     };
   }
 
-  async *stream(messages: readonly Message[]): AsyncIterable<StreamChunk> {
+  async *stream(messages: readonly Message[], options?: ShardOptions): AsyncIterable<StreamChunk> {
     const system = messages.find((message) => message.role === "system")?.content;
     const response = await this.#fetch(`${this.#baseUrl}/messages`, {
       method: "POST",
@@ -56,7 +57,8 @@ export class AnthropicShard implements Shard {
         stream: true,
         ...(system ? { system } : {}),
         messages: messages.filter((message) => message.role !== "system").map((message) => ({ role: message.role === "assistant" ? "assistant" : "user", content: message.content }))
-      })
+      }),
+      signal: options?.signal
     });
     if (!response.ok) throw new Error(`Anthropic stream failed: ${response.status} ${await response.text()}`);
     if (!response.body) throw new Error("Anthropic stream failed: missing response body");
