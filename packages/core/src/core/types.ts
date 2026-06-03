@@ -1,19 +1,29 @@
 export type Role = "system" | "user" | "assistant" | "tool";
 
+export interface ToolCall {
+  readonly id: string;
+  readonly name: string;
+  readonly arguments: Record<string, unknown>;
+}
+
 export interface Message {
   readonly role: Role;
   readonly content: string;
   readonly name?: string;
+  readonly toolCalls?: readonly ToolCall[];
+  readonly toolCallId?: string;
   readonly createdAt: Date;
 }
 
 export interface AssistantResponse {
   readonly content: string;
+  readonly toolCalls?: readonly ToolCall[];
   readonly usage?: TokenUsage;
 }
 
 export type StreamChunk =
   | { readonly type: "text"; readonly text: string }
+  | { readonly type: "tool_calls"; readonly toolCalls: readonly ToolCall[] }
   | { readonly type: "usage"; readonly usage: TokenUsage }
   | { readonly type: "done" };
 
@@ -23,10 +33,12 @@ export interface TokenUsage {
 }
 
 export interface RunRequest {
-  readonly prompt: string;
+  readonly prompt?: string;
+  readonly promptMessage?: Message;
   readonly workspace: string;
   readonly sessionId: string;
   readonly onText?: (text: string) => void;
+  readonly tools?: readonly { readonly name: string; readonly description: string; readonly inputSchema?: RuneSchema }[];
 }
 
 export interface RunResult {
@@ -52,10 +64,15 @@ export type Flow =
   | { readonly type: "circle.message_received"; readonly circle: string; readonly from: string; readonly text: string; readonly at: Date };
 
 
+export interface ShardOptions {
+  readonly signal?: AbortSignal;
+  readonly tools?: readonly { readonly name: string; readonly description: string; readonly inputSchema?: RuneSchema }[];
+}
+
 export interface Shard {
   readonly name: string;
-  complete(messages: readonly Message[], options?: { readonly signal?: AbortSignal }): Promise<AssistantResponse>;
-  stream?(messages: readonly Message[], options?: { readonly signal?: AbortSignal }): AsyncIterable<StreamChunk>;
+  complete(messages: readonly Message[], options?: ShardOptions): Promise<AssistantResponse>;
+  stream?(messages: readonly Message[], options?: ShardOptions): AsyncIterable<StreamChunk>;
 }
 
 
