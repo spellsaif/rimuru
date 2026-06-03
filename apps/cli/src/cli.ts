@@ -21,6 +21,7 @@ import {
   createSemanticMemory,
   serveMcpStdio,
   createRuntimeRuneRegistry,
+  createRuntime,
   isRisk,
   runAgentTurn,
   runChatTurn,
@@ -1067,12 +1068,23 @@ async function webDash(): Promise<void> {
 async function tui(): Promise<void> {
   const config = await loadRuntimeConfig({ workspace: process.cwd() });
   const flowBus = new FlowBus();
-  const chronicle = new JsonChronicle(resolve(config.memoryDir));
-  await runInteractiveTui({
-    sovereign: new Sovereign({ shard: createShard(config), chronicle, flowBus }),
+  
+  const runtime = await createRuntime({
+    config,
+    workspace: process.cwd(),
     flowBus,
-    chronicle,
-    traceStore: new JsonTraceStore(resolve(process.cwd(), ".rimuru", "traces")),
+    approvals: process.env.RIMURU_APPROVALS === "1",
+    approvalPrompt: async (request) => {
+      return { allowed: true, reason: "auto-approved in TUI" };
+    }
+  });
+
+  await runInteractiveTui({
+    sovereign: runtime.sovereign,
+    runes: runtime.runes,
+    flowBus,
+    chronicle: runtime.chronicle,
+    traceStore: runtime.traceStore,
     workspace: process.cwd(),
     sessionId: config.sessionId,
     provider: config.provider,

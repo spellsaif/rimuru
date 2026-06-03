@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { render, Box, Text, useInput, useApp } from "ink";
-import type { Flow, FlowBus, Sovereign, JsonChronicle, JsonTraceStore } from "@rimuru/core";
+import { Flow, FlowBus, Sovereign, JsonChronicle, JsonTraceStore, AgentLoop, RuneRegistry } from "@rimuru/core";
 
 export interface TuiState {
   readonly sessionId: string;
@@ -15,6 +15,7 @@ export interface TuiState {
 
 export interface InteractiveTuiOptions {
   readonly sovereign: Sovereign;
+  readonly runes: RuneRegistry;
   readonly flowBus: FlowBus;
   readonly chronicle: JsonChronicle;
   readonly traceStore: JsonTraceStore;
@@ -48,7 +49,31 @@ const TextInput = ({ value, onChange, onSubmit, placeholder, isDisabled }: any) 
   );
 };
 
+const useTerminalSize = () => {
+  const [size, setSize] = useState({
+    columns: process.stdout.columns || 80,
+    rows: process.stdout.rows || 24,
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setSize({
+        columns: process.stdout.columns || 80,
+        rows: process.stdout.rows || 24,
+      });
+    };
+
+    process.stdout.on("resize", handleResize);
+    return () => {
+      process.stdout.off("resize", handleResize);
+    };
+  }, []);
+
+  return size;
+};
+
 const TuiApp = ({ options }: { options: InteractiveTuiOptions }) => {
+  const { columns, rows } = useTerminalSize();
   const [transcript, setTranscript] = useState<any[]>([]);
   const [events, setEvents] = useState<Flow[]>([]);
   const [inputText, setInputText] = useState("");
@@ -58,7 +83,7 @@ const TuiApp = ({ options }: { options: InteractiveTuiOptions }) => {
 
   useEffect(() => {
     const unlisten = options.flowBus.listen((event: Flow) => {
-      setEvents((prev) => [...prev, event].slice(-10));
+      setEvents((prev) => [...prev, event].slice(-100));
       if (event.type === "rune.requested") {
         setActiveRune(event.rune);
       }
@@ -89,20 +114,23 @@ const TuiApp = ({ options }: { options: InteractiveTuiOptions }) => {
 
     try {
       let currentContent = "";
-      await options.sovereign.run({
-        prompt,
+      const loop = new AgentLoop({
+        sovereign: options.sovereign,
+        runes: options.runes,
         workspace: options.workspace,
         sessionId: options.sessionId,
-        onText: (text) => {
-          currentContent += text;
-          setTranscript((prev) => {
-            const next = [...prev];
-            if (next.length > 0) {
-              next[next.length - 1] = { role: "assistant" as const, content: currentContent };
-            }
-            return next;
-          });
-        }
+        flowBus: options.flowBus,
+        audit: true
+      });
+      await loop.run(prompt, (text) => {
+        currentContent += text;
+        setTranscript((prev) => {
+          const next = [...prev];
+          if (next.length > 0) {
+            next[next.length - 1] = { role: "assistant" as const, content: currentContent };
+          }
+          return next;
+        });
       });
     } catch (e: any) {
       const errorMsg = e instanceof Error ? e.message : String(e);
@@ -115,8 +143,34 @@ const TuiApp = ({ options }: { options: InteractiveTuiOptions }) => {
     }
   };
 
+  // Outer dimensions
+  const outerWidth = Math.max(40, columns - 2);
+  const outerHeight = Math.max(10, rows - 2);
+
+  // Overhead calculation:
+  // Title bar: 2 rows
+  // Status line: 2 rows
+  // Input pane: 3 rows
+  // Footer help: 2 rows
+  // Borders & padding: 4 rows
+  // Total = 13 rows
+  const mainHeight = Math.max(4, outerHeight - 13);
+
+  // Proportional widths
+  const telemetryWidth = Math.max(20, Math.floor(outerWidth * 0.3));
+  const chatWidth = Math.max(20, outerWidth - telemetryWidth - 3);
+
+  // Transcript slice logic
+  // Estimate ~3.5 lines per message (header + content + spacing)
+  const maxMessages = Math.max(3, Math.floor(mainHeight / 3.5));
+  const visibleTranscript = transcript.slice(-maxMessages);
+
+  // Fit events inside the events panel height (accounting for header & padding)
+  const maxEvents = Math.max(2, mainHeight - 4);
+  const visibleEvents = events.slice(-maxEvents);
+
   return (
-    <Box flexDirection="column" width={80} borderStyle="single" borderColor="cyan" padding={1}>
+    <Box flexDirection="column" width={outerWidth} height={outerHeight} borderStyle="single" borderColor="cyan" padding={1}>
       {/* Title Bar */}
       <Box justifyContent="center" marginBottom={1}>
         <Text bold color="cyan">🌌 RIMURU SOVEREIGN SESSIONS 🌌</Text>
@@ -127,9 +181,9 @@ const TuiApp = ({ options }: { options: InteractiveTuiOptions }) => {
       </Box>
 
       {/* Main Area (Split Chat & Events) */}
-      <Box flexDirection="row" height={16} marginBottom={1}>
+      <Box flexDirection="row" height={mainHeight} marginBottom={1}>
         {/* Chat History Panel */}
-        <Box flexDirection="column" width={50} borderStyle="round" borderColor="gray" padding={1} marginRight={2}>
+        <Box flexDirection="column" width={chatWidth} borderStyle="round" borderColor="gray" padding={1} marginRight={2}>
           <Box marginBottom={1}>
             <Text bold color="white">💬 CONVERSATION</Text>
           </Box>
@@ -137,8 +191,7 @@ const TuiApp = ({ options }: { options: InteractiveTuiOptions }) => {
             {transcript.length === 0 ? (
               <Text gray italic>Ask Rimuru a question to start the conversation...</Text>
             ) : (
-              // Show only the last 3-4 messages to avoid terminal overflow
-              transcript.slice(-4).map((msg, idx) => {
+              visibleTranscript.map((msg, idx) => {
                 const isUser = msg.role === "user";
                 const isSystem = msg.role === "system";
                 const roleLabel = isUser ? "👤 YOU" : isSystem ? "⚠️ SYSTEM" : "🌌 RIMURU";
@@ -155,15 +208,15 @@ const TuiApp = ({ options }: { options: InteractiveTuiOptions }) => {
         </Box>
 
         {/* Telemetry Events Panel */}
-        <Box flexDirection="column" width={26} borderStyle="round" borderColor="yellow" padding={1}>
+        <Box flexDirection="column" width={telemetryWidth} borderStyle="round" borderColor="yellow" padding={1}>
           <Box marginBottom={1}>
             <Text bold color="yellow">⚡ EVENTS HUD</Text>
           </Box>
-          <Box flexDirection="column">
+          <Box flexDirection="column" flexGrow={1}>
             {events.length === 0 ? (
               <Text gray italic>No events recorded yet.</Text>
             ) : (
-              events.map((e, idx) => {
+              visibleEvents.map((e, idx) => {
                 const type = e.type.split(".")[1] || e.type;
                 let icon = "•";
                 if (e.type.startsWith("rune.")) icon = "⚡";

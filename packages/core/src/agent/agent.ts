@@ -220,5 +220,11 @@ function parseAction(content: string): { type: "call" | "finish"; thought: strin
     }
   }
 
+  // Fallback: If no Action header is present but we have response content,
+  // treat it as the final answer/finish.
+  if (content && !content.includes("Action:")) {
+    return { type: "finish", thought: content };
+  }
+
   return undefined;
 }
