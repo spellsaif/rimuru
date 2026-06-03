@@ -679,29 +679,29 @@ async function handleCircleAdapter(ctx: RouteContext) {
   // Webhook Cryptographic Verification
   if (circle.kind === "slack") {
     const signingSecret = (circle as any).signingSecret ?? ((circle as any).secret ?? process.env.SLACK_SIGNING_SECRET);
-    if (signingSecret) {
-      const timestamp = String(request.headers["x-slack-request-timestamp"] ?? "");
-      const signature = String(request.headers["x-slack-signature"] ?? "");
-      const rawBody = (request as any).rawBody ?? "";
-      if (!verifySlackSignature(signingSecret, timestamp, rawBody, signature)) {
-        sendJson(response, request, 401, { error: "Unauthorized", message: "Invalid Slack signature" }, options.corsOrigins);
-        return true;
-      }
-    } else {
-      console.warn(`[gate] Warning: No Slack signing secret configured for circle ${circle.name}. Skipping signature verification.`);
+    if (!signingSecret) {
+      sendJson(response, request, 401, { error: "Unauthorized", message: "Slack signing secret is not configured" }, options.corsOrigins);
+      return true;
+    }
+    const timestamp = String(request.headers["x-slack-request-timestamp"] ?? "");
+    const signature = String(request.headers["x-slack-signature"] ?? "");
+    const rawBody = (request as any).rawBody ?? "";
+    if (!verifySlackSignature(signingSecret, timestamp, rawBody, signature)) {
+      sendJson(response, request, 401, { error: "Unauthorized", message: "Invalid Slack signature" }, options.corsOrigins);
+      return true;
     }
   } else if (circle.kind === "discord") {
     const publicKey = (circle as any).publicKey ?? ((circle as any).secret ?? process.env.DISCORD_PUBLIC_KEY);
-    if (publicKey) {
-      const timestamp = String(request.headers["x-signature-timestamp"] ?? "");
-      const signature = String(request.headers["x-signature-ed25519"] ?? "");
-      const rawBody = (request as any).rawBody ?? "";
-      if (!verifyDiscordSignature(publicKey, timestamp, rawBody, signature)) {
-        sendJson(response, request, 401, { error: "Unauthorized", message: "Invalid Discord signature" }, options.corsOrigins);
-        return true;
-      }
-    } else {
-      console.warn(`[gate] Warning: No Discord public key configured for circle ${circle.name}. Skipping signature verification.`);
+    if (!publicKey) {
+      sendJson(response, request, 401, { error: "Unauthorized", message: "Discord public key is not configured" }, options.corsOrigins);
+      return true;
+    }
+    const timestamp = String(request.headers["x-signature-timestamp"] ?? "");
+    const signature = String(request.headers["x-signature-ed25519"] ?? "");
+    const rawBody = (request as any).rawBody ?? "";
+    if (!verifyDiscordSignature(publicKey, timestamp, rawBody, signature)) {
+      sendJson(response, request, 401, { error: "Unauthorized", message: "Invalid Discord signature" }, options.corsOrigins);
+      return true;
     }
   }
 
