@@ -1,5 +1,5 @@
 import { FlowBus } from "./events.js";
-import type { AssistantResponse, Chronicle, Message, RunRequest, RunResult, Shard } from "./types.js";
+import type { AssistantResponse, Chronicle, Message, RunRequest, RunResult, Shard, ToolCall, RuneSchema } from "./types.js";
 
 export interface SovereignOptions {
   readonly shard: Shard;
@@ -30,21 +30,22 @@ export class Sovereign {
     const history = await this.#chronicle.load(request.sessionId);
     this.#flowBus.emit({ type: "memory.loaded", count: history.length, at: this.#clock() });
 
-    const userMessage: Message = {
+    const userMessage: Message = request.promptMessage ?? {
       role: "user",
-      content: request.prompt,
+      content: request.prompt ?? "",
       createdAt: this.#clock()
     };
 
     const messages = [this.systemMessage(), ...history, userMessage];
     this.#flowBus.emit({ type: "provider.requested", provider: this.#shard.name, messages: messages.length, at: this.#clock() });
 
-    const response = await this.complete(messages, request.onText);
+    const response = await this.complete(messages, request.onText, request.tools);
     this.#flowBus.emit({ type: "provider.responded", provider: this.#shard.name, at: this.#clock() });
 
     const assistantMessage: Message = {
       role: "assistant",
       content: response.content,
+      ...(response.toolCalls ? { toolCalls: response.toolCalls } : {}),
       createdAt: this.#clock()
     };
 
@@ -67,20 +68,25 @@ export class Sovereign {
     };
   }
 
-  private async complete(messages: readonly Message[], onText?: (text: string) => void): Promise<AssistantResponse> {
-    if (!this.#shard.stream) return this.#shard.complete(messages);
+  private async complete(messages: readonly Message[], onText?: (text: string) => void, tools?: readonly { readonly name: string; readonly description: string; readonly inputSchema?: RuneSchema }[]): Promise<AssistantResponse> {
+    if (!this.#shard.stream) return this.#shard.complete(messages, { tools });
 
     let content = "";
+    let toolCalls: ToolCall[] | undefined;
     let usage: AssistantResponse["usage"];
-    for await (const chunk of this.#shard.stream(messages)) {
+    for await (const chunk of this.#shard.stream(messages, { tools })) {
       if (chunk.type === "text") {
         content += chunk.text;
         onText?.(chunk.text);
         this.#flowBus.emit({ type: "provider.streamed", provider: this.#shard.name, bytes: Buffer.byteLength(chunk.text), at: this.#clock() });
       }
+      if (chunk.type === "tool_calls") {
+        if (!toolCalls) toolCalls = [];
+        toolCalls.push(...chunk.toolCalls);
+      }
       if (chunk.type === "usage") usage = chunk.usage;
     }
-    return { content, ...(usage ? { usage } : {}) };
+    return { content, ...(toolCalls ? { toolCalls } : {}), ...(usage ? { usage } : {}) };
   }
 }
 
