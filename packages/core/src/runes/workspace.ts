@@ -330,7 +330,7 @@ export const compileWasmRune: Rune<
 > = {
   name: "workspace.compileWasm",
   description:
-    "Compiles Rust or transpiles TypeScript to a sandboxed Rune stored in the workspace .rimuru/runes/ directory.",
+    "Compiles Rust or transpiles TypeScript to a sandboxed Rune stored in the workspace .rimuru/runes/ directory. PREFER 'typescript' for lightweight logic, algorithms, and calculators as it compiles instantly and is less prone to compiler errors. Use 'rust' ONLY for heavy computation or systems integration.",
   risk: "write",
   inputSchema: {
     type: "object",
