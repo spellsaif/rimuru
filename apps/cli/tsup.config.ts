@@ -33,5 +33,6 @@ export default defineConfig({
     "zlib",
     "whatsapp-web.js",
     "typescript",
+    "quickjs-emscripten",
   ],
 });
