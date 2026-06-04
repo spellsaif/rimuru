@@ -9,6 +9,7 @@ export default defineConfig({
   bundle: true,
   publicDir: "public",
   target: "node20",
+  platform: "node",
   // Bundle internal workspace packages
   noExternal: ["@rimuru/core", "@rimuru/gate", "@rimuru/vault"],
   shims: true, // Fix for some CJS dependencies
