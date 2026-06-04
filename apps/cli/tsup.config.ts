@@ -32,5 +32,6 @@ export default defineConfig({
     "https",
     "zlib",
     "whatsapp-web.js",
+    "typescript",
   ],
 });
