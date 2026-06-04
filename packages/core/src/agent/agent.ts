@@ -62,16 +62,6 @@ export class AgentLoop {
    * Runs a dynamic ReAct (Reason+Act) loop to solve the objective.
    */
   async run(objective: string, onText?: (text: string) => void): Promise<AgentRunResult> {
-    const startingHistory = this.options.chronicle ? await this.options.chronicle.load(this.options.sessionId) : [];
-    const tempSessionId = `${this.options.sessionId}-temp-${Date.now()}`;
-    if (this.options.chronicle) {
-      if (this.options.chronicle.overwrite) {
-        await this.options.chronicle.overwrite(tempSessionId, startingHistory);
-      } else {
-        await this.options.chronicle.append(tempSessionId, startingHistory);
-      }
-    }
-
     const observations: AgentObservation[] = [];
     const maxSteps = this.options.maxSteps ?? 10;
     const runes = this.options.runes
@@ -87,7 +77,7 @@ export class AgentLoop {
       const parser = onText ? new ReActStreamParser((text) => process.stdout.write(text)) : undefined;
       const turnRequest: any = {
         workspace: this.options.workspace,
-        sessionId: tempSessionId,
+        sessionId: this.options.sessionId,
         tools: runes,
         ...(parser ? { onText: (chunk: string) => parser.ingest(chunk) } : {}),
       };
@@ -174,7 +164,7 @@ export class AgentLoop {
           try {
             output = await this.options.runes.invoke(rune, input, {
               workspace: branchDir,
-              sessionId: tempSessionId,
+              sessionId: this.options.sessionId,
               audit: this.options.audit ?? true,
             });
             await mergeWorkspaceBranch(this.options.workspace, branchId);
@@ -184,7 +174,7 @@ export class AgentLoop {
         } else {
           output = await this.options.runes.invoke(rune, input, {
             workspace: this.options.workspace,
-            sessionId: tempSessionId,
+            sessionId: this.options.sessionId,
             audit: this.options.audit ?? true,
           });
         }
@@ -217,31 +207,9 @@ export class AgentLoop {
       final = await this.options.sovereign.run({
         prompt: `Objective: ${objective}\n\nBased on the execution history, provide the final conversational answer to the user. Do NOT use the ReAct format (Thought/Action/Input) here; respond directly to the user.`,
         workspace: this.options.workspace,
-        sessionId: tempSessionId,
+        sessionId: this.options.sessionId,
         ...(onText ? { onText } : {}),
       });
-    }
-
-    if (this.options.chronicle && this.options.chronicle.overwrite) {
-      const userObjectiveMessage: Message = {
-        role: "user",
-        content: objective,
-        createdAt: new Date(),
-      };
-      const finalAssistantMessage: Message = {
-        role: "assistant",
-        content: final.response.content,
-        createdAt: new Date(),
-      };
-      await this.options.chronicle.overwrite(this.options.sessionId, [
-        ...startingHistory,
-        userObjectiveMessage,
-        finalAssistantMessage,
-      ]);
-    }
-
-    if (this.options.chronicle && this.options.chronicle.delete) {
-      await this.options.chronicle.delete(tempSessionId);
     }
 
     return { plan, observations, final };
