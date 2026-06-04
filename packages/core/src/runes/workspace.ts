@@ -373,9 +373,26 @@ export const compileWasmRune: Rune<
 
     if (input.language === "typescript") {
       const ts = await import("typescript");
-      const transpiled = ts.default.transpileModule(input.sourceCode, {
+      let transpiled = ts.default.transpileModule(input.sourceCode, {
         compilerOptions: { target: ts.default.ScriptTarget.ES2022, module: ts.default.ModuleKind.ESNext },
       }).outputText;
+
+      // Clean ES6 module export structures since QuickJS eval only evaluates plain scripts
+      transpiled = transpiled.replace(/export\s+{[^}]+};?/g, "");
+      transpiled = transpiled.replace(/export\s+default\s+[^;\n]+;?/g, "");
+      transpiled = transpiled.replace(/\bexport\s+(function|const|let|var|class)\b/g, "$1");
+
+      // Auto-runner: check if function is declared matching the rune name, and bind execution
+      const safeFuncName = input.name.replace(/[^a-zA-Z0-9]/g, "");
+      const autoRunWrapper = `
+// Automatically appended by Rimuru compiler to execute the entry function in QuickJS
+if (typeof ${safeFuncName} === "function") {
+  globalThis.output = ${safeFuncName}(input);
+} else if (typeof ${input.name} === "function") {
+  globalThis.output = ${input.name}(input);
+}
+`;
+      transpiled += autoRunWrapper;
 
       const jsPath = `${targetPath}.js`;
       await writeFile(jsPath, transpiled, "utf8");

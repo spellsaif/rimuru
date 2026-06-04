@@ -54,6 +54,46 @@ describe("WASM/JS synthesis and compilation engine", () => {
     }
   });
 
+  it("compiles and runs a TS rune that exports a function matching the rune name", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rimuru-ts-export-"));
+    try {
+      const context = {
+        workspace: root,
+        sessionId: "test-ts-export-session",
+        allowedRisks: ["read", "write", "execute"] as any,
+      };
+
+      const sourceCode = `
+        export function loveCalculator(names: { person1: string, person2: string }): { score: number } {
+          return { score: 99 };
+        }
+      `;
+
+      const result = await compileWasmRune.invoke(
+        {
+          language: "typescript",
+          sourceCode,
+          name: "loveCalculator",
+          description: "Calculates compatibility",
+        },
+        context as any,
+      );
+
+      expect(result.path).toContain("loveCalculator.js");
+      expect(result.configPath).toContain("loveCalculator.json");
+
+      const runes = await discoverSandboxedRunes(root);
+      expect(runes).toHaveLength(1);
+      const rune = runes[0]!;
+      expect(rune.name).toBe("custom.loveCalculator");
+
+      const output = await rune.invoke({ person1: "Rimuru", person2: "Ciel" }, context as any);
+      expect(output).toEqual({ score: 99 });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("compiles and runs a Rust WASM rune dynamically using WASI", async () => {
     const root = await mkdtemp(join(tmpdir(), "rimuru-rust-compile-"));
     try {
