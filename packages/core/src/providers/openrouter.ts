@@ -1,4 +1,4 @@
-import type { AssistantResponse, Message, Shard, StreamChunk, TokenUsage } from "../core/types.js";
+import type { AssistantResponse, Message, Shard, ShardOptions, StreamChunk, TokenUsage, ToolCall } from "../core/types.js";
 
 export interface OpenRouterOptions {
   readonly baseUrl?: string;
@@ -34,7 +34,19 @@ export class OpenRouterShard implements Shard {
     throw new Error("Unreachable");
   }
 
-  async complete(messages: readonly Message[]): Promise<AssistantResponse> {
+  async complete(messages: readonly Message[], options?: ShardOptions): Promise<AssistantResponse> {
+    const payloadTools =
+      options?.tools && options.tools.length > 0
+        ? options.tools.map((t) => ({
+            type: "function" as const,
+            function: {
+              name: t.name,
+              description: t.description,
+              parameters: t.inputSchema ?? { type: "object", properties: {} },
+            },
+          }))
+        : undefined;
+
     const response = await this.#fetchWithRetry(`${this.#baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
@@ -47,6 +59,7 @@ export class OpenRouterShard implements Shard {
         model: this.#model,
         messages: messages.map((m) => toChatMessage(m, this.#model)),
         stream: false,
+        ...(payloadTools ? { tools: payloadTools } : {}),
       }),
     });
 
@@ -55,13 +68,46 @@ export class OpenRouterShard implements Shard {
     }
 
     const payload = (await response.json()) as ChatCompletionResponse;
+    const choice = payload.choices?.[0]?.message;
+    const toolCalls: ToolCall[] = [];
+    if (choice?.tool_calls) {
+      for (const tc of choice.tool_calls) {
+        if (tc.type === "function" && tc.function) {
+          let args: any = {};
+          try {
+            args = JSON.parse(tc.function.arguments ?? "{}");
+          } catch {
+            // ignore
+          }
+          toolCalls.push({
+            id: tc.id,
+            name: tc.function.name,
+            arguments: args,
+          });
+        }
+      }
+    }
+
     return {
-      content: payload.choices[0]?.message.content ?? "",
+      content: choice?.content ?? "",
+      ...(toolCalls.length > 0 ? { toolCalls } : {}),
       ...(payload.usage ? { usage: toUsage(payload.usage) } : {}),
     };
   }
 
-  async *stream(messages: readonly Message[]): AsyncIterable<StreamChunk> {
+  async *stream(messages: readonly Message[], options?: ShardOptions): AsyncIterable<StreamChunk> {
+    const payloadTools =
+      options?.tools && options.tools.length > 0
+        ? options.tools.map((t) => ({
+            type: "function" as const,
+            function: {
+              name: t.name,
+              description: t.description,
+              parameters: t.inputSchema ?? { type: "object", properties: {} },
+            },
+          }))
+        : undefined;
+
     const response = await this.#fetchWithRetry(`${this.#baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
@@ -75,6 +121,7 @@ export class OpenRouterShard implements Shard {
         messages: messages.map((m) => toChatMessage(m, this.#model)),
         stream: true,
         stream_options: { include_usage: true },
+        ...(payloadTools ? { tools: payloadTools } : {}),
       }),
     });
 
@@ -83,24 +130,93 @@ export class OpenRouterShard implements Shard {
     }
     if (!response.body) throw new Error("OpenRouter stream failed: missing response body");
 
+    const accumulatedToolCalls = new Map<number, { id?: string; name?: string; arguments: string }>();
+
     for await (const event of parseSse(response.body)) {
       if (event === "[DONE]") break;
-      const payload = JSON.parse(event) as ChatCompletionChunk;
-      const text = payload.choices[0]?.delta.content;
+      let payload: ChatCompletionChunk;
+      try {
+        payload = JSON.parse(event) as ChatCompletionChunk;
+      } catch {
+        continue;
+      }
+      
+      const text = payload.choices?.[0]?.delta.content;
       if (text) yield { type: "text", text };
+
+      const toolCallsDelta = payload.choices?.[0]?.delta?.tool_calls;
+      if (toolCallsDelta) {
+        for (const tc of toolCallsDelta) {
+          const idx = tc.index;
+          if (!accumulatedToolCalls.has(idx)) {
+            accumulatedToolCalls.set(idx, { arguments: "" });
+          }
+          const entry = accumulatedToolCalls.get(idx)!;
+          if (tc.id) entry.id = tc.id;
+          if (tc.function?.name) entry.name = tc.function.name;
+          if (tc.function?.arguments) entry.arguments += tc.function.arguments;
+        }
+      }
+
       if (payload.usage) yield { type: "usage", usage: toUsage(payload.usage) };
     }
+
+    const finalToolCalls: ToolCall[] = [];
+    for (const [_, entry] of accumulatedToolCalls.entries()) {
+      if (entry.name) {
+        let args: any = {};
+        try {
+          args = JSON.parse(entry.arguments || "{}");
+        } catch {
+          // ignore
+        }
+        finalToolCalls.push({
+          id: entry.id ?? `call-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          name: entry.name,
+          arguments: args,
+        });
+      }
+    }
+    if (finalToolCalls.length > 0) {
+      yield { type: "tool_calls", toolCalls: finalToolCalls };
+    }
+
     yield { type: "done" };
   }
 }
 
 interface ChatCompletionResponse {
-  readonly choices: readonly { readonly message: { readonly content?: string } }[];
+  readonly choices: readonly {
+    readonly message: {
+      readonly content?: string;
+      readonly tool_calls?: readonly {
+        readonly id: string;
+        readonly type: "function";
+        readonly function: {
+          readonly name: string;
+          readonly arguments: string;
+        };
+      }[];
+    };
+  }[];
   readonly usage?: { readonly prompt_tokens?: number; readonly completion_tokens?: number };
 }
 
 interface ChatCompletionChunk {
-  readonly choices: readonly { readonly delta: { readonly content?: string } }[];
+  readonly choices: readonly {
+    readonly delta: {
+      readonly content?: string;
+      readonly tool_calls?: readonly {
+        readonly index: number;
+        readonly id?: string;
+        readonly type?: "function";
+        readonly function?: {
+          readonly name?: string;
+          readonly arguments?: string;
+        };
+      }[];
+    };
+  }[];
   readonly usage?: { readonly prompt_tokens?: number; readonly completion_tokens?: number };
 }
 
@@ -128,19 +244,36 @@ async function* parseSse(body: ReadableStream<Uint8Array>): AsyncIterable<string
   }
 }
 
-function toChatMessage(
-  message: Message,
-  model: string,
-): { readonly role: string; readonly content: string; readonly name?: string } {
-  let role = message.role === "tool" ? "user" : message.role;
+function toChatMessage(message: Message, model: string): any {
+  if (message.role === "tool") {
+    return {
+      role: "tool",
+      tool_call_id: message.toolCallId,
+      content: message.content,
+    };
+  }
+
+  let role = message.role;
   if (role === "system" && (model.includes("gemma") || model.includes("o1-") || model.includes("o3-"))) {
     role = "user";
   }
-  return {
+  const result: any = {
     role,
     content: message.content,
-    ...(message.name === undefined ? {} : { name: message.name }),
   };
+
+  if (message.toolCalls && message.toolCalls.length > 0) {
+    result.tool_calls = message.toolCalls.map((tc) => ({
+      id: tc.id,
+      type: "function" as const,
+      function: {
+        name: tc.name,
+        arguments: JSON.stringify(tc.arguments),
+      },
+    }));
+  }
+
+  return result;
 }
 
 function toUsage(usage: { readonly prompt_tokens?: number; readonly completion_tokens?: number }): TokenUsage {

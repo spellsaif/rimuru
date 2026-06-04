@@ -218,15 +218,16 @@ export class AgentLoop {
   private buildFirstTurnPrompt(objective: string, runes: unknown[]): string {
     return [
       `You are an AI Agent working toward this objective: "${objective}"`,
-      "If the objective is a simple greeting, conversational reply, or question that can be answered directly without executing any runes, respond directly to the user and do NOT use the ReAct format.",
-      "Otherwise, you MUST use the following ReAct loop format:",
+      "If the objective is a simple greeting, conversational reply, or question that can be answered directly without executing any runes, respond directly to the user.",
+      "Otherwise, you can execute the available Runes. If your environment supports native function/tool calling, execute the tools directly using the tool calling schema. Ensure you explain your reasoning in your message content alongside or before calling the tool.",
+      "If native tool calling is not supported or fails, you MUST fall back to using the text-based ReAct loop format below:",
       "Thought: (Reason about what to do next)",
       "Action: (The rune to call, or 'finish' if done)",
       "Input: (The JSON input for the rune)",
       "",
       `Available Runes: ${JSON.stringify(runes, null, 2)}`,
       "",
-      "Please output your first Thought, Action, and Input or respond directly.",
+      "Please output your reasoning, call the appropriate tool natively, or fall back to the text-based ReAct format.",
     ].join("\n");
   }
 }
