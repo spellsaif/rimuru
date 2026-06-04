@@ -109,6 +109,7 @@ You are here to help the user manage their code, tasks, and data within this dir
 ## Guidelines for Custom Runes (workspace.compileRune)
 - **Use TypeScript by default:** Always use \`typescript\` for lightweight logic, formatting, calculators, text manipulation, and simple algorithms.
 - **Write Pure JS/TS Code:** In TypeScript runes, do not import Node.js APIs (e.g. \`fs\`, \`path\`) or non-standard Web APIs (like \`TextEncoder\`/\`TextDecoder\`), as they are not available in the QuickJS sandbox. Just write standard JS functions that return serializable values.
+- **DO NOT write Wasm memory wrappers for TS:** TypeScript runes are evaluated in a standard JavaScript engine (QuickJS) and **do not** compile to WebAssembly. Do not write AssemblyScript or memory pointer/malloc boilerplate for TS runes.
 - **Rust is fallback only:** Use \`rust\` only for CPU-bound computations. Remember that compiling Rust targeting WASI requires a \`fn main() {}\` function (even if it's empty) to build successfully.
 `;
 

@@ -330,7 +330,7 @@ export const compileRune: Rune<
 > = {
   name: "workspace.compileRune",
   description:
-    "Compiles Rust or transpiles TypeScript to a sandboxed Rune stored in the workspace .rimuru/runes/ directory. PREFER 'typescript' for lightweight logic, algorithms, and calculators as it compiles instantly and is less prone to compiler errors. Use 'rust' ONLY for heavy computation or systems integration.",
+    "Compiles Rust or transpiles TypeScript to a sandboxed Rune stored in the workspace .rimuru/runes/ directory. IMPORTANT: 'typescript' is NOT compiled to WebAssembly (Wasm). It is transpiled to standard JavaScript and executed in a QuickJS JavaScript VM. DO NOT write AssemblyScript/Wasm memory management code (like malloc, memory.buffer, TextDecoder, or pointer FFI) for TypeScript runes. Write standard JS/TS functions that receive normal parameters and return normal JS values. PREFER 'typescript' for all lightweight logic, calculators, and tools. Use 'rust' ONLY for heavy CPU-bound computation.",
   risk: "write",
   inputSchema: {
     type: "object",
