@@ -406,6 +406,20 @@ if (typeof ${safeFuncName} === "function") {
       await writeFile(jsPath, transpiled, "utf8");
       await writeFile(configPath, JSON.stringify(runeConfig, null, 2), "utf8");
 
+      if (context.registry && typeof context.registry.register === "function") {
+        const { executeDynamicRune } = await import("../security/sandbox-vm.js");
+        context.registry.register({
+          name: runeConfig.name,
+          description: runeConfig.description,
+          risk: runeConfig.risk as RuneRisk,
+          inputSchema: runeConfig.inputSchema,
+          outputSchema: runeConfig.outputSchema,
+          async invoke(val: unknown) {
+            return await executeDynamicRune(transpiled, val);
+          },
+        });
+      }
+
       return { path: jsPath, configPath };
     } else if (input.language === "rust") {
       const tempRustPath = join(context.workspace, `.temp-${Date.now()}-${input.name}.rs`);
@@ -426,6 +440,34 @@ if (typeof ${safeFuncName} === "function") {
         try {
           await unlink(tempRustPath);
         } catch {}
+      }
+
+      if (context.registry && typeof context.registry.register === "function") {
+        context.registry.register({
+          name: runeConfig.name,
+          description: runeConfig.description,
+          risk: runeConfig.risk as RuneRisk,
+          inputSchema: runeConfig.inputSchema,
+          outputSchema: runeConfig.outputSchema,
+          async invoke(val: unknown, ctx: RuneContext) {
+            const { runSandboxedCommand } = await import("../security/sandbox.js");
+            const jsonInput = JSON.stringify(val);
+            const result = await runSandboxedCommand(
+              {
+                command: targetPath,
+                workspace: ctx.workspace,
+                stdin: jsonInput,
+              },
+              "wasi",
+            );
+            const stdoutTrimmed = (result.stdout || "").trim();
+            try {
+              return JSON.parse(stdoutTrimmed);
+            } catch {
+              return stdoutTrimmed || result.stderr || "WASI execution completed";
+            }
+          },
+        });
       }
 
       return { path: wasmPath, configPath };
