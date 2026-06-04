@@ -57,6 +57,7 @@ export {
   shellRune,
   workspaceRunes,
   fileTreeRune,
+  compileRune,
   compileWasmRune,
 } from "./runes/workspace.js";
 export { webSearchRune, webFetchUrlRune, webRunes } from "./runes/web.js";

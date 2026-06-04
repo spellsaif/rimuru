@@ -316,7 +316,7 @@ export const fileTreeRune: Rune<{ readonly maxDepth?: number }, { readonly tree:
   },
 };
 
-export const compileWasmRune: Rune<
+export const compileRune: Rune<
   {
     readonly language: "rust" | "typescript";
     readonly sourceCode: string;
@@ -328,7 +328,7 @@ export const compileWasmRune: Rune<
   },
   { readonly path: string; readonly configPath: string }
 > = {
-  name: "workspace.compileWasm",
+  name: "workspace.compileRune",
   description:
     "Compiles Rust or transpiles TypeScript to a sandboxed Rune stored in the workspace .rimuru/runes/ directory. PREFER 'typescript' for lightweight logic, algorithms, and calculators as it compiles instantly and is less prone to compiler errors. Use 'rust' ONLY for heavy computation or systems integration.",
   risk: "write",
@@ -336,7 +336,12 @@ export const compileWasmRune: Rune<
     type: "object",
     required: ["language", "sourceCode", "name", "description"],
     properties: {
-      language: { type: "string" },
+      language: {
+        type: "string",
+        enum: ["typescript", "rust"],
+        description:
+          "The programming language of the source code. MUST be 'typescript' for lightweight code, logic, calculators, text patterns, and simple algorithms to avoid compile overhead. Use 'rust' ONLY for heavy CPU-bound computation.",
+      },
       sourceCode: { type: "string" },
       name: { type: "string" },
       description: { type: "string" },
@@ -430,6 +435,8 @@ if (typeof ${safeFuncName} === "function") {
   },
 };
 
+export const compileWasmRune = compileRune;
+
 export const workspaceRunes = [
   readFileRune,
   listDirRune,
@@ -441,7 +448,7 @@ export const workspaceRunes = [
   deleteFileRune,
   applyPatchRune,
   fileTreeRune,
-  compileWasmRune,
+  compileRune,
 ] as const;
 
 function safeWorkspacePath(context: RuneContext, path: string): string {
