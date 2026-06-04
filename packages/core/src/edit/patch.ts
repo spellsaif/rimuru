@@ -1,8 +1,8 @@
-import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
-import { dirname, join } from "node:path";
 import { execFile } from "node:child_process";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
-import { assertCommandName, assertFormatterName } from "../security/workspace.js";
+import { assertFormatterName } from "../security/workspace.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -24,7 +24,12 @@ export type PatchLine =
 
 export interface PatchApplyResult {
   readonly changed: boolean;
-  readonly files: readonly { readonly path: string; readonly changed: boolean; readonly preview: string; readonly rollbackPath?: string }[];
+  readonly files: readonly {
+    readonly path: string;
+    readonly changed: boolean;
+    readonly preview: string;
+    readonly rollbackPath?: string;
+  }[];
 }
 
 export interface ApplyPatchOptions {
@@ -85,9 +90,9 @@ export function parseUnifiedPatch(patch: string): readonly PatchFile[] {
 
 export async function applyUnifiedPatch(options: ApplyPatchOptions): Promise<PatchApplyResult> {
   const files = parseUnifiedPatch(options.patch);
-  
+
   // 1. Calculate all patch contents in memory first to prevent partial/corrupted writes on failure
-  const prep: { 
+  const prep: {
     file: PatchFile;
     target: string;
     before: string;
@@ -124,7 +129,11 @@ export async function applyUnifiedPatch(options: ApplyPatchOptions): Promise<Pat
       if (options.rollbackDir) {
         rollbackPath = join(options.rollbackDir, `${Date.now()}-${safeName(file.newPath)}.json`);
         await mkdir(dirname(rollbackPath), { recursive: true });
-        await writeFile(rollbackPath, `${JSON.stringify({ path: file.newPath, before, after, createdAt: new Date().toISOString() }, null, 2)}\n`, "utf8");
+        await writeFile(
+          rollbackPath,
+          `${JSON.stringify({ path: file.newPath, before, after, createdAt: new Date().toISOString() }, null, 2)}\n`,
+          "utf8",
+        );
       }
       if (isDeletion) {
         await unlink(target);
@@ -140,7 +149,12 @@ export async function applyUnifiedPatch(options: ApplyPatchOptions): Promise<Pat
         }
       }
     }
-    results.push({ path: file.newPath, changed, preview: createUnifiedPreview(file.newPath, before, after), ...(rollbackPath ? { rollbackPath } : {}) });
+    results.push({
+      path: file.newPath,
+      changed,
+      preview: createUnifiedPreview(file.newPath, before, after),
+      ...(rollbackPath ? { rollbackPath } : {}),
+    });
   }
 
   return { changed: results.some((result) => result.changed), files: results };

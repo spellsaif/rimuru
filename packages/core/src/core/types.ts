@@ -38,7 +38,11 @@ export interface RunRequest {
   readonly workspace: string;
   readonly sessionId: string;
   readonly onText?: (text: string) => void;
-  readonly tools?: readonly { readonly name: string; readonly description: string; readonly inputSchema?: RuneSchema }[];
+  readonly tools?: readonly {
+    readonly name: string;
+    readonly description: string;
+    readonly inputSchema?: RuneSchema;
+  }[];
 }
 
 export interface RunResult {
@@ -59,14 +63,29 @@ export type Flow =
   | { readonly type: "memory.saved"; readonly count: number; readonly at: Date }
   | { readonly type: "thought.emitted"; readonly thought: string; readonly at: Date }
   | { readonly type: "run.completed"; readonly sessionId: string; readonly at: Date }
-  | { readonly type: "circle.pairing_requested"; readonly circle: string; readonly kind: string; readonly data?: any; readonly at: Date }
+  | {
+      readonly type: "circle.pairing_requested";
+      readonly circle: string;
+      readonly kind: string;
+      readonly data?: any;
+      readonly at: Date;
+    }
   | { readonly type: "circle.connected"; readonly circle: string; readonly kind: string; readonly at: Date }
-  | { readonly type: "circle.message_received"; readonly circle: string; readonly from: string; readonly text: string; readonly at: Date };
-
+  | {
+      readonly type: "circle.message_received";
+      readonly circle: string;
+      readonly from: string;
+      readonly text: string;
+      readonly at: Date;
+    };
 
 export interface ShardOptions {
   readonly signal?: AbortSignal;
-  readonly tools?: readonly { readonly name: string; readonly description: string; readonly inputSchema?: RuneSchema }[];
+  readonly tools?: readonly {
+    readonly name: string;
+    readonly description: string;
+    readonly inputSchema?: RuneSchema;
+  }[];
 }
 
 export interface Shard {
@@ -74,7 +93,6 @@ export interface Shard {
   complete(messages: readonly Message[], options?: ShardOptions): Promise<AssistantResponse>;
   stream?(messages: readonly Message[], options?: ShardOptions): AsyncIterable<StreamChunk>;
 }
-
 
 export interface Chronicle {
   load(sessionId: string): Promise<readonly Message[]>;
@@ -98,7 +116,9 @@ export interface Rune<Input = unknown, Output = unknown> {
 export interface RuneSchema {
   readonly type: "object";
   readonly required?: readonly string[];
-  readonly properties?: Readonly<Record<string, { readonly type: "string" | "boolean" | "number" | "array" | "object" }>>;
+  readonly properties?: Readonly<
+    Record<string, { readonly type: "string" | "boolean" | "number" | "array" | "object" }>
+  >;
 }
 
 export type RuneRisk = "read" | "write" | "execute" | "network";
@@ -140,4 +160,3 @@ export interface GateStatus {
   readonly vows: readonly string[];
   readonly barrier: string;
 }
-

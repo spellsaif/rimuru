@@ -6,8 +6,12 @@ describe("permissions", () => {
     const registry = new RuneRegistry({ policy: new StaticPermissionPolicy() });
     registry.register(shellRune);
 
-    await expect(registry.invoke("workspace.shell", { command: "node", args: ["--version"] }, { workspace: process.cwd(), sessionId: "s" })).rejects.toThrow(
-      "risk 'execute' is not allowed"
-    );
+    await expect(
+      registry.invoke(
+        "workspace.shell",
+        { command: "node", args: ["--version"] },
+        { workspace: process.cwd(), sessionId: "s" },
+      ),
+    ).rejects.toThrow("risk 'execute' is not allowed");
   });
 });

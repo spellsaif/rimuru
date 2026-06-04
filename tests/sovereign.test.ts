@@ -16,7 +16,7 @@ describe("Sovereign", () => {
       "provider.requested",
       "provider.responded",
       "memory.saved",
-      "run.completed"
+      "run.completed",
     ]);
   });
 

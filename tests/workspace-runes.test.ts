@@ -12,9 +12,11 @@ describe("workspace runes", () => {
 
       await expect(readFileRune.invoke({ path: "story.txt" }, { workspace: root, sessionId: "s" })).resolves.toEqual({
         path: join(root, "story.txt"),
-        content: "rimuru tempest"
+        content: "rimuru tempest",
       });
-      await expect(readFileRune.invoke({ path: "../outside.txt" }, { workspace: root, sessionId: "s" })).rejects.toThrow("Path escapes workspace");
+      await expect(
+        readFileRune.invoke({ path: "../outside.txt" }, { workspace: root, sessionId: "s" }),
+      ).rejects.toThrow("Path escapes workspace");
     } finally {
       await rm(root, { recursive: true, force: true });
     }

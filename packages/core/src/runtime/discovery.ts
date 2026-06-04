@@ -1,8 +1,8 @@
-import { readFile, readdir, stat } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import type { Rune, RuneRisk, RuneContext } from "../core/types.js";
 import { execFile } from "node:child_process";
+import { readFile, readdir } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { promisify } from "node:util";
+import type { Rune, RuneContext, RuneRisk } from "../core/types.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -79,16 +79,16 @@ function parseRuneMd(folderName: string, content: string, root: string): Rune | 
       const tokens = cmd.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
       if (tokens.length === 0) throw new Error("Empty command");
       const program = tokens[0]!.replace(/^"|"$/g, "");
-      const args = tokens.slice(1).map(arg => arg.replace(/^"|"$/g, ""));
+      const args = tokens.slice(1).map((arg) => arg.replace(/^"|"$/g, ""));
 
       const { runSandboxedCommand } = await import("../security/sandbox.js");
       const result = await runSandboxedCommand({
         command: program,
         args,
-        workspace: context?.workspace ?? root
+        workspace: context?.workspace ?? root,
       });
       return result.stdout || result.stderr;
-    }
+    },
   };
 }
 
@@ -121,7 +121,7 @@ export async function discoverSandboxedRunes(workspace: string): Promise<readonl
             outputSchema: config.outputSchema,
             async invoke(input) {
               return await executeDynamicRune(code, input);
-            }
+            },
           };
           runes.push(rune);
         } catch (error) {
@@ -144,18 +144,21 @@ export async function discoverSandboxedRunes(workspace: string): Promise<readonl
             async invoke(input, context) {
               const { runSandboxedCommand } = await import("../security/sandbox.js");
               const jsonInput = JSON.stringify(input);
-              const result = await runSandboxedCommand({
-                command: join(runesDir, nameWithoutExt),
-                workspace: context.workspace,
-                stdin: jsonInput
-              }, "wasi");
+              const result = await runSandboxedCommand(
+                {
+                  command: join(runesDir, nameWithoutExt),
+                  workspace: context.workspace,
+                  stdin: jsonInput,
+                },
+                "wasi",
+              );
               const stdoutTrimmed = (result.stdout || "").trim();
               try {
                 return JSON.parse(stdoutTrimmed);
               } catch {
                 return stdoutTrimmed || result.stderr || "WASI execution completed";
               }
-            }
+            },
           };
           runes.push(rune);
         } catch (error) {
@@ -168,4 +171,3 @@ export async function discoverSandboxedRunes(workspace: string): Promise<readonl
   }
   return runes;
 }
-

@@ -2,7 +2,15 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
-import { buildLexicalIndex, handleMcpCall, MemoryChronicle, MockShard, RuneRegistry, Sovereign, workspaceRune } from "../src/index.js";
+import {
+  buildLexicalIndex,
+  handleMcpCall,
+  MemoryChronicle,
+  MockShard,
+  RuneRegistry,
+  Sovereign,
+  workspaceRune,
+} from "../src/index.js";
 import { AgentLoop } from "../src/index.js";
 
 describe("full assistant slice", () => {
@@ -22,9 +30,14 @@ describe("full assistant slice", () => {
     const registry = new RuneRegistry();
     registry.register(workspaceRune);
 
-    await expect(handleMcpCall(registry, { method: "tools/list" })).resolves.toMatchObject({ tools: [{ name: "workspace.ask" }] });
+    await expect(handleMcpCall(registry, { method: "tools/list" })).resolves.toMatchObject({
+      tools: [{ name: "workspace.ask" }],
+    });
     await expect(
-      handleMcpCall(registry, { method: "tools/call", params: { name: "workspace.ask", arguments: { question: "hi" }, workspace: "/tmp", sessionId: "s" } })
+      handleMcpCall(registry, {
+        method: "tools/call",
+        params: { name: "workspace.ask", arguments: { question: "hi" }, workspace: "/tmp", sessionId: "s" },
+      }),
     ).resolves.toMatchObject({ content: { answer: "Workspace /tmp received: hi" } });
   });
 
@@ -35,7 +48,7 @@ describe("full assistant slice", () => {
       sovereign: new Sovereign({ shard: new MockShard(), chronicle: new MemoryChronicle() }),
       runes: registry,
       workspace: "/tmp",
-      sessionId: "s"
+      sessionId: "s",
     });
 
     const result = await loop.run("answer normally");

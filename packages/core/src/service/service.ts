@@ -28,8 +28,11 @@ WantedBy=default.target
 `;
 }
 
-export async function writeSystemdUserService(options: ServiceFileOptions & { readonly path?: string }): Promise<string> {
-  const path = options.path ?? join(process.env.HOME ?? options.workspace, ".config", "systemd", "user", "rimuru.service");
+export async function writeSystemdUserService(
+  options: ServiceFileOptions & { readonly path?: string },
+): Promise<string> {
+  const path =
+    options.path ?? join(process.env.HOME ?? options.workspace, ".config", "systemd", "user", "rimuru.service");
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, renderSystemdUserService(options), "utf8");
   return path;

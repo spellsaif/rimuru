@@ -6,12 +6,12 @@ import { fileURLToPath } from "node:url";
 import * as readline from "node:readline/promises";
 import * as net from "node:net";
 import chalk from "chalk";
-import { 
-  FlowBus, 
-  JsonChronicle, 
-  JsonTraceStore, 
-  Sovereign, 
-  loadRuntimeConfig, 
+import {
+  FlowBus,
+  JsonChronicle,
+  JsonTraceStore,
+  Sovereign,
+  loadRuntimeConfig,
   type ProviderKind,
   validateRuntimeConfig,
   createShard,
@@ -39,21 +39,10 @@ import {
   createCanvasArtifact,
   listCanvasArtifacts,
   readCanvasArtifact,
-  writeSystemdUserService
+  writeSystemdUserService,
 } from "@rimuru/core";
-import { 
-  getGateStatus, 
-  readGateState, 
-  stopGate,
-  listenGateServer,
-  getGateRuntimeStatus
-} from "@rimuru/gate";
-import { 
-  deleteVaultSecret, 
-  getVaultSecret, 
-  listVaultSecrets, 
-  setVaultSecret 
-} from "@rimuru/vault";
+import { getGateStatus, readGateState, stopGate, listenGateServer, getGateRuntimeStatus } from "@rimuru/gate";
+import { deleteVaultSecret, getVaultSecret, listVaultSecrets, setVaultSecret } from "@rimuru/vault";
 import { ansi, paint } from "./ansi.js";
 import { renderDashboard } from "./dashboard.js";
 import sirv from "sirv";
@@ -63,18 +52,25 @@ import { createServer } from "node:http";
 import { promptApproval, runInteractiveTui } from "./interactive.js";
 import { setupWorkspace, setupWorkspaceInteractive } from "./setup.js";
 
-
 const h = () => dirname(fileURLToPath(import.meta.url));
 
 function printBanner() {
-  process.stdout.write(paint("\n" + [
-    "   ____  ____ __  ________  ____  __ ",
-    "  / __ \\/  _/  |/  / __ / / / / / / ",
-    " / /_/ // // /|_/ / /_/ / / / / / /  ",
-    "/ _, _// // /  / / _, _/ /_/ /_/ /   ",
-    "/_/ |_/___/_/  /_/_/ |_|\\____/\\____/ ",
-    "                                      "
-  ].join("\n") + "\n", ansi.cyan, ansi.bold));
+  process.stdout.write(
+    paint(
+      "\n" +
+        [
+          "   ____  ____ __  ________  ____  __ ",
+          "  / __ \\/  _/  |/  / __ / / / / / / ",
+          " / /_/ // // /|_/ / /_/ / / / / / /  ",
+          "/ _, _// // /  / / _, _/ /_/ /_/ /   ",
+          "/_/ |_/___/_/  /_/_/ |_|\\____/\\____/ ",
+          "                                      ",
+        ].join("\n") +
+        "\n",
+      ansi.cyan,
+      ansi.bold,
+    ),
+  );
   process.stdout.write(paint(`   Sovereign Runtime • v0.8.0-dev\n\n`, ansi.gray, ansi.italic));
 }
 
@@ -350,17 +346,16 @@ program
   });
 
 // Set default action when no command is provided
-program
-  .action(async () => {
-    if (process.argv.slice(2).length === 0) {
-      printBanner();
-      help();
-    } else {
-      process.stderr.write(paint(`Unknown command: ${process.argv.slice(2).join(" ")}\n`, ansi.red));
-      help();
-      process.exitCode = 1;
-    }
-  });
+program.action(async () => {
+  if (process.argv.slice(2).length === 0) {
+    printBanner();
+    help();
+  } else {
+    process.stderr.write(paint(`Unknown command: ${process.argv.slice(2).join(" ")}\n`, ansi.red));
+    help();
+    process.exitCode = 1;
+  }
+});
 
 // Override help printing to match our beautiful existing help layout
 program.on("--help", () => {
@@ -382,9 +377,13 @@ async function chat(args: readonly string[]): Promise<void> {
     return;
   }
 
-
   const config = await loadRuntimeConfig({ workspace: process.cwd() });
-  const result = await runChatTurn({ config, workspace: process.cwd(), prompt, trace: process.env.RIMURU_TRACE === "1" });
+  const result = await runChatTurn({
+    config,
+    workspace: process.cwd(),
+    prompt,
+    trace: process.env.RIMURU_TRACE === "1",
+  });
   process.stdout.write(`${result.response.content}\n`);
 }
 
@@ -441,7 +440,7 @@ async function doctor(): Promise<void> {
     diagnostics.push({
       level: "error",
       code: "FS_WRITE_ERROR",
-      message: "Workspace .rimuru directory is not writeable. Check file permissions."
+      message: "Workspace .rimuru directory is not writeable. Check file permissions.",
     });
   }
 
@@ -454,7 +453,7 @@ async function doctor(): Promise<void> {
       diagnostics.push({
         level: "warning",
         code: "OLLAMA_OFFLINE",
-        message: `Ollama local daemon is not reachable at ${config.baseUrl ?? "http://127.0.0.1:11434"}. Make sure it is running.`
+        message: `Ollama local daemon is not reachable at ${config.baseUrl ?? "http://127.0.0.1:11434"}. Make sure it is running.`,
       });
     }
   } else if (config.provider !== "mock") {
@@ -464,13 +463,13 @@ async function doctor(): Promise<void> {
       if (vaultKey) keyExists = true;
     } catch {}
     if (!keyExists && process.env.RIMURU_API_KEY) keyExists = true;
-    
+
     if (!keyExists) {
       providerStatus = "MISSING_API_KEY";
       diagnostics.push({
         level: "error",
         code: "MISSING_API_KEY",
-        message: `API Key for ${config.provider} is missing. Set RIMURU_API_KEY in your environment or Vault.`
+        message: `API Key for ${config.provider} is missing. Set RIMURU_API_KEY in your environment or Vault.`,
       });
     }
   }
@@ -483,13 +482,13 @@ async function doctor(): Promise<void> {
     diagnostics.push({
       level: "warning",
       code: "PORT_OCCUPIED",
-      message: `Gateway port ${config.gatewayPort} is occupied. Verify if another instance is running.`
+      message: `Gateway port ${config.gatewayPort} is occupied. Verify if another instance is running.`,
     });
   }
 
   if (fix) {
     const fixedItems: string[] = [];
-    
+
     // 1. Create missing folders
     const subDirs = ["sessions", "traces", "plugins", "rollbacks", "canvas", "rituals", "service"];
     for (const name of subDirs) {
@@ -511,7 +510,7 @@ async function doctor(): Promise<void> {
           diagnostics.push({
             level: "error",
             code: "DAEMON_FIX_FAILED",
-            message: `Failed to generate systemd service: ${err.message}`
+            message: `Failed to generate systemd service: ${err.message}`,
           });
         }
       }
@@ -545,7 +544,7 @@ async function doctor(): Promise<void> {
     ["session", config.sessionId],
     ["memory", config.memoryDir],
     ["risks", config.allowedRisks.join(",")],
-    ["sandbox", config.sandboxMode]
+    ["sandbox", config.sandboxMode],
   ];
 
   if (json) {
@@ -565,8 +564,8 @@ async function doctor(): Promise<void> {
   }
 
   process.stdout.write("\n" + chalk.bold("DIAGNOSTIC MESSAGES:") + "\n");
-  const errors = diagnostics.filter(d => d.level === "error");
-  const warnings = diagnostics.filter(d => d.level === "warning");
+  const errors = diagnostics.filter((d) => d.level === "error");
+  const warnings = diagnostics.filter((d) => d.level === "warning");
 
   if (diagnostics.length === 0) {
     process.stdout.write(chalk.green("No issues found. Your Sovereign assistant workspace is healthy.\n"));
@@ -579,36 +578,46 @@ async function doctor(): Promise<void> {
 }
 
 async function init(): Promise<void> {
-  const isInteractive = process.argv.includes("--wizard") || 
-                        process.argv.includes("--interactive") || 
-                        (process.stdin.isTTY && process.argv.length <= 3);
+  const isInteractive =
+    process.argv.includes("--wizard") ||
+    process.argv.includes("--interactive") ||
+    (process.stdin.isTTY && process.argv.length <= 3);
 
   if (isInteractive) {
-    const result = await setupWorkspaceInteractive({ workspace: process.cwd(), force: process.argv.includes("--force") });
+    const result = await setupWorkspaceInteractive({
+      workspace: process.cwd(),
+      force: process.argv.includes("--force"),
+    });
     process.stdout.write(`\nInitialized Rimuru workspace at ${process.cwd()}\nConfig: ${result.configPath}\n`);
     return;
   }
-  
+
   const model = argValue(process.argv, "--model");
-  const result = await setupWorkspace({ 
-    workspace: process.cwd(), 
-    provider: parseProviderArg(argValue(process.argv, "--provider") ?? argValue(process.argv, "--shard") ?? "openai-compatible"), 
-    ...(model ? { model } : {}), 
-    vessel: argValue(process.argv, "--vessel") ?? "main", 
-    soul: argValue(process.argv, "--soul") ?? "default", 
-    vows: (argValue(process.argv, "--vows") ?? "read").split(",").map((vow) => vow.trim()).filter(Boolean), 
-    barrier: parseBarrierArg(argValue(process.argv, "--barrier") ?? "none"), 
-    gatewayPort: Number(argValue(process.argv, "--port") ?? 19710), 
-    force: process.argv.includes("--force") 
+  const result = await setupWorkspace({
+    workspace: process.cwd(),
+    provider: parseProviderArg(
+      argValue(process.argv, "--provider") ?? argValue(process.argv, "--shard") ?? "openai-compatible",
+    ),
+    ...(model ? { model } : {}),
+    vessel: argValue(process.argv, "--vessel") ?? "main",
+    soul: argValue(process.argv, "--soul") ?? "default",
+    vows: (argValue(process.argv, "--vows") ?? "read")
+      .split(",")
+      .map((vow) => vow.trim())
+      .filter(Boolean),
+    barrier: parseBarrierArg(argValue(process.argv, "--barrier") ?? "none"),
+    gatewayPort: Number(argValue(process.argv, "--port") ?? 19710),
+    force: process.argv.includes("--force"),
   });
   process.stdout.write(`Initialized Rimuru workspace at ${process.cwd()}\nConfig: ${result.configPath}\n`);
 }
 
-
 async function gate(args: readonly string[]): Promise<void> {
   const subcommand = args.find((arg) => !arg.startsWith("--")) ?? "status";
   if (subcommand !== "status" && subcommand !== "start" && subcommand !== "stop" && subcommand !== "install-service") {
-    process.stderr.write("Usage: rimuru gate [status|start|stop|install-service] [--host <host>] [--port <port>] [--approvals] [--json]\n");
+    process.stderr.write(
+      "Usage: rimuru gate [status|start|stop|install-service] [--host <host>] [--port <port>] [--approvals] [--json]\n",
+    );
     process.exitCode = 1;
     return;
   }
@@ -621,15 +630,27 @@ async function gate(args: readonly string[]): Promise<void> {
   }
 
   if (subcommand === "start") {
-    const handle = await listenGateServer({ config, workspace: process.cwd(), host: argValue(args, "--host") ?? "127.0.0.1", port: Number(argValue(args, "--port") ?? config.gatewayPort), approvals: args.includes("--approvals") || process.env.RIMURU_APPROVALS === "1", trace: process.env.RIMURU_TRACE === "1" });
-    if (args.includes("--json")) process.stdout.write(`${JSON.stringify({ ...handle.status, url: handle.url }, null, 2)}\n`);
+    const handle = await listenGateServer({
+      config,
+      workspace: process.cwd(),
+      host: argValue(args, "--host") ?? "127.0.0.1",
+      port: Number(argValue(args, "--port") ?? config.gatewayPort),
+      approvals: args.includes("--approvals") || process.env.RIMURU_APPROVALS === "1",
+      trace: process.env.RIMURU_TRACE === "1",
+    });
+    if (args.includes("--json"))
+      process.stdout.write(`${JSON.stringify({ ...handle.status, url: handle.url }, null, 2)}\n`);
     else process.stdout.write(`Rimuru Gate listening at ${handle.url}\n`);
     await new Promise<void>(() => undefined);
     return;
   }
 
   if (subcommand === "install-service") {
-    const path = await writeSystemdUserService({ workspace: process.cwd(), port: Number(argValue(args, "--port") ?? config.gatewayPort), cliPath: resolve(process.cwd(), "dist", "cli.js") });
+    const path = await writeSystemdUserService({
+      workspace: process.cwd(),
+      port: Number(argValue(args, "--port") ?? config.gatewayPort),
+      cliPath: resolve(process.cwd(), "dist", "cli.js"),
+    });
     process.stdout.write(`Wrote systemd user service: ${path}\nRun: systemctl --user enable --now rimuru.service\n`);
     return;
   }
@@ -649,8 +670,8 @@ async function gate(args: readonly string[]): Promise<void> {
       `vows      ${status.vows.join(",") || "none"}`,
       `barrier   ${status.barrier}`,
       ...(runtimeStatus.url ? [`url       ${runtimeStatus.url}`] : []),
-      ...(runtimeStatus.pid ? [`pid       ${runtimeStatus.pid}`] : [])
-    ].join("\n") + "\n"
+      ...(runtimeStatus.pid ? [`pid       ${runtimeStatus.pid}`] : []),
+    ].join("\n") + "\n",
   );
 }
 
@@ -677,7 +698,13 @@ async function session(args: readonly string[]): Promise<void> {
       process.exitCode = 1;
       return;
     }
-    const result = await runChatTurn({ config, workspace: process.cwd(), prompt, sessionId, trace: process.env.RIMURU_TRACE === "1" });
+    const result = await runChatTurn({
+      config,
+      workspace: process.cwd(),
+      prompt,
+      sessionId,
+      trace: process.env.RIMURU_TRACE === "1",
+    });
     process.stdout.write(`${result.response.content}\n`);
     return;
   }
@@ -693,7 +720,13 @@ async function vessel(args: readonly string[]): Promise<void> {
     return;
   }
   if (subcommand === "current") {
-    process.stdout.write(`${JSON.stringify(listVessels(config).find((item) => item.active), null, 2)}\n`);
+    process.stdout.write(
+      `${JSON.stringify(
+        listVessels(config).find((item) => item.active),
+        null,
+        2,
+      )}\n`,
+    );
     return;
   }
   if (subcommand === "create" && name) {
@@ -703,8 +736,11 @@ async function vessel(args: readonly string[]): Promise<void> {
       shard: argValue(args, "--provider") ?? argValue(args, "--shard") ?? "mock",
       model: argValue(args, "--model") ?? "mock",
       soul: argValue(args, "--soul") ?? name,
-      vows: (argValue(args, "--vows") ?? "read").split(",").map((vow) => vow.trim()).filter(Boolean),
-      barrier: argValue(args, "--barrier") ?? "none"
+      vows: (argValue(args, "--vows") ?? "read")
+        .split(",")
+        .map((vow) => vow.trim())
+        .filter(Boolean),
+      barrier: argValue(args, "--barrier") ?? "none",
     };
     await writeLocalConfig({ ...local, vessels });
     process.stdout.write(`${JSON.stringify({ created: name, vessel: vessels[name] }, null, 2)}\n`);
@@ -724,10 +760,18 @@ async function rune(args: readonly string[]): Promise<void> {
 
   const config = await loadRuntimeConfig({ workspace: process.cwd() });
   const flowBus = new FlowBus();
-  const registry = await createCliRuneRegistry(config.allowedRisks.filter(isRisk), process.env.RIMURU_APPROVALS === "1", flowBus);
+  const registry = await createCliRuneRegistry(
+    config.allowedRisks.filter(isRisk),
+    process.env.RIMURU_APPROVALS === "1",
+    flowBus,
+  );
 
   const input = JSON.parse(rawInput) as unknown;
-  const output = await registry.invoke(name, input, { workspace: process.cwd(), sessionId: config.sessionId, audit: true });
+  const output = await registry.invoke(name, input, {
+    workspace: process.cwd(),
+    sessionId: config.sessionId,
+    audit: true,
+  });
   process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
 }
 
@@ -756,7 +800,9 @@ async function channel(args: readonly string[]): Promise<void> {
   }
   if (subcommand === "add") {
     if (!name) {
-      process.stderr.write("Usage: rimuru channel add <local|telegram|slack|discord|webhook> [name] [--token-env ENV]\n");
+      process.stderr.write(
+        "Usage: rimuru channel add <local|telegram|slack|discord|webhook> [name] [--token-env ENV]\n",
+      );
       process.exitCode = 1;
       return;
     }
@@ -764,16 +810,27 @@ async function channel(args: readonly string[]): Promise<void> {
     const circleName = rest.find((item) => !item.startsWith("--")) ?? name;
     const local = await readLocalConfig();
     const circles = Array.isArray(local.circles) ? [...local.circles] : [];
-    circles.push({ name: circleName, kind, enabled: true, ...(argValue(args, "--token-env") ? { tokenEnv: argValue(args, "--token-env") } : {}), allowFrom: (argValue(args, "--allow") ?? (kind === "local" ? "*" : "")).split(",").map((item) => item.trim()).filter(Boolean) });
+    circles.push({
+      name: circleName,
+      kind,
+      enabled: true,
+      ...(argValue(args, "--token-env") ? { tokenEnv: argValue(args, "--token-env") } : {}),
+      allowFrom: (argValue(args, "--allow") ?? (kind === "local" ? "*" : ""))
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    });
     await writeLocalConfig({ ...local, circles });
     process.stdout.write(`${JSON.stringify({ added: circleName, kind }, null, 2)}\n`);
     return;
   }
   if (subcommand === "remove" && name) {
     const local = await readLocalConfig();
-    const circles = Array.isArray(local.circles) ? local.circles.filter((circle) => !isRecord(circle) || circle.name !== name) : [];
+    const circles = Array.isArray(local.circles)
+      ? local.circles.filter((circle) => !isRecord(circle) || circle.name !== name)
+      : [];
     await writeLocalConfig({ ...local, circles });
-    
+
     // Deep Clean: Remove auth/data directory if requested
     if (args.includes("--clean")) {
       const { rm } = await import("node:fs/promises");
@@ -800,11 +857,18 @@ async function channel(args: readonly string[]): Promise<void> {
         return;
       }
       const config = await loadRuntimeConfig({ workspace: process.cwd() });
-      const result = await runChatTurn({ config, workspace: process.cwd(), prompt: `Circle local message from cli: ${message}`, trace: process.env.RIMURU_TRACE === "1" });
+      const result = await runChatTurn({
+        config,
+        workspace: process.cwd(),
+        prompt: `Circle local message from cli: ${message}`,
+        trace: process.env.RIMURU_TRACE === "1",
+      });
       process.stdout.write(`${result.response.content}\n`);
       return;
     }
-    process.stderr.write("Direct sends are only implemented for local Circle; external Circles receive webhooks through Gate.\n");
+    process.stderr.write(
+      "Direct sends are only implemented for local Circle; external Circles receive webhooks through Gate.\n",
+    );
     process.exitCode = 1;
     return;
   }
@@ -886,7 +950,9 @@ async function ritual(args: readonly string[]): Promise<void> {
       return;
     }
     const config = await loadRuntimeConfig({ workspace: process.cwd() });
-    process.stdout.write(`${JSON.stringify(await createRitual(process.cwd(), { id, prompt, sessionId: argValue(args, "--session") ?? config.sessionId, everyMinutes: Number(argValue(args, "--every") ?? 60) }), null, 2)}\n`);
+    process.stdout.write(
+      `${JSON.stringify(await createRitual(process.cwd(), { id, prompt, sessionId: argValue(args, "--session") ?? config.sessionId, everyMinutes: Number(argValue(args, "--every") ?? 60) }), null, 2)}\n`,
+    );
     return;
   }
   if (subcommand === "enable" && id) {
@@ -901,7 +967,9 @@ async function ritual(args: readonly string[]): Promise<void> {
     process.stdout.write(`${JSON.stringify(await deleteRitual(process.cwd(), id), null, 2)}\n`);
     return;
   }
-  process.stderr.write("Usage: rimuru ritual [list|create <id> <prompt> --every <minutes>|enable <id>|disable <id>|delete <id>]\n");
+  process.stderr.write(
+    "Usage: rimuru ritual [list|create <id> <prompt> --every <minutes>|enable <id>|disable <id>|delete <id>]\n",
+  );
   process.exitCode = 1;
 }
 
@@ -922,7 +990,9 @@ async function canvas(args: readonly string[]): Promise<void> {
       process.exitCode = 1;
       return;
     }
-    process.stdout.write(`${JSON.stringify(await createCanvasArtifact(process.cwd(), { title: id, kind: parseArtifactKind(argValue(args, "--kind") ?? "markdown"), content }), null, 2)}\n`);
+    process.stdout.write(
+      `${JSON.stringify(await createCanvasArtifact(process.cwd(), { title: id, kind: parseArtifactKind(argValue(args, "--kind") ?? "markdown"), content }), null, 2)}\n`,
+    );
     return;
   }
   process.stderr.write("Usage: rimuru canvas [list|show <id>|create <title> <content>]\n");
@@ -931,9 +1001,14 @@ async function canvas(args: readonly string[]): Promise<void> {
 
 async function release(args: readonly string[]): Promise<void> {
   const [subcommand = "check"] = args;
-  const pkg = JSON.parse(await readFile(resolve(process.cwd(), "package.json"), "utf8")) as { readonly name?: string; readonly version?: string };
+  const pkg = JSON.parse(await readFile(resolve(process.cwd(), "package.json"), "utf8")) as {
+    readonly name?: string;
+    readonly version?: string;
+  };
   if (subcommand === "check") {
-    process.stdout.write(`${JSON.stringify({ package: pkg.name ?? "rimuru", localVersion: pkg.version ?? "0.0.0", npm: `npm view ${pkg.name ?? "rimuru"} version`, publish: "npm publish --access public", checks: ["npm run check", "npm pack --dry-run"] }, null, 2)}\n`);
+    process.stdout.write(
+      `${JSON.stringify({ package: pkg.name ?? "rimuru", localVersion: pkg.version ?? "0.0.0", npm: `npm view ${pkg.name ?? "rimuru"} version`, publish: "npm publish --access public", checks: ["npm run check", "npm pack --dry-run"] }, null, 2)}\n`,
+    );
     return;
   }
   process.stderr.write("Usage: rimuru update [check]\n");
@@ -943,7 +1018,9 @@ async function release(args: readonly string[]): Promise<void> {
 async function registry(args: readonly string[]): Promise<void> {
   const [subcommand = "list"] = args;
   if (subcommand === "list") {
-    process.stdout.write(`${JSON.stringify({ registry: "local", pluginDir: resolve(process.cwd(), ".rimuru", "plugins"), install: "Place a skill folder containing rimuru.plugin.json in .rimuru/plugins/<name>." }, null, 2)}\n`);
+    process.stdout.write(
+      `${JSON.stringify({ registry: "local", pluginDir: resolve(process.cwd(), ".rimuru", "plugins"), install: "Place a skill folder containing rimuru.plugin.json in .rimuru/plugins/<name>." }, null, 2)}\n`,
+    );
     return;
   }
   process.stderr.write("Usage: rimuru registry [list]\n");
@@ -954,7 +1031,9 @@ async function approval(args: readonly string[]): Promise<void> {
   const [subcommand = "list", id] = args;
   const gate = await readGateState(process.cwd());
   if (!gate) {
-    process.stdout.write(`${JSON.stringify({ pending: [], note: "Gate is not running. Start with: rimuru gate start --approvals" }, null, 2)}\n`);
+    process.stdout.write(
+      `${JSON.stringify({ pending: [], note: "Gate is not running. Start with: rimuru gate start --approvals" }, null, 2)}\n`,
+    );
     return;
   }
   if (subcommand === "list") {
@@ -962,11 +1041,15 @@ async function approval(args: readonly string[]): Promise<void> {
     return;
   }
   if ((subcommand === "approve" || subcommand === "allow") && id) {
-    process.stdout.write(`${JSON.stringify(await fetchGateJson(gate.url, `/approvals/${id}/approve`, { scope: args.includes("--session") ? "session" : "once" }), null, 2)}\n`);
+    process.stdout.write(
+      `${JSON.stringify(await fetchGateJson(gate.url, `/approvals/${id}/approve`, { scope: args.includes("--session") ? "session" : "once" }), null, 2)}\n`,
+    );
     return;
   }
   if ((subcommand === "deny" || subcommand === "reject") && id) {
-    process.stdout.write(`${JSON.stringify(await fetchGateJson(gate.url, `/approvals/${id}/deny`, { reason: "denied by CLI" }), null, 2)}\n`);
+    process.stdout.write(
+      `${JSON.stringify(await fetchGateJson(gate.url, `/approvals/${id}/deny`, { reason: "denied by CLI" }), null, 2)}\n`,
+    );
     return;
   }
   process.stderr.write("Usage: rimuru approval [list|approve <id> [--session]|deny <id>]\n");
@@ -1003,8 +1086,12 @@ async function configCmd(args: readonly string[]): Promise<void> {
   if (subcommand === "set" && key) {
     const value = rest.join(" ");
     let parsed: any = value;
-    try { parsed = JSON.parse(value); } catch { /* use as string */ }
-    
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      /* use as string */
+    }
+
     local[key] = parsed;
     await writeLocalConfig(local);
     process.stdout.write(paint(`✔ Set ${key} to ${value}\n`, ansi.green));
@@ -1016,7 +1103,6 @@ async function configCmd(args: readonly string[]): Promise<void> {
 }
 
 function plan(args: readonly string[]): void {
-
   const objective = args.join(" ").trim();
   if (!objective) {
     process.stderr.write("Usage: rimuru plan <objective>\n");
@@ -1029,25 +1115,25 @@ function plan(args: readonly string[]): void {
 async function webDash(): Promise<void> {
   const workspace = process.cwd();
   const config = await loadRuntimeConfig({ workspace });
-  
+
   // 1. Ensure Gate is running
   const runtimeStatus = await getGateRuntimeStatus(config, workspace);
   if (runtimeStatus.runtime !== "running") {
     console.log(paint("Launching Sovereign Gate...", ansi.cyan));
-    listenGateServer({ 
-      workspace, 
+    listenGateServer({
+      workspace,
       config,
-      port: config.gatewayPort
-    }).then(handle => {
-      console.log(paint(`Gate online at ${handle.url}`, ansi.gray));
-    }).catch(err => console.error("Failed to start Gate:", err));
+      port: config.gatewayPort,
+    })
+      .then((handle) => {
+        console.log(paint(`Gate online at ${handle.url}`, ansi.gray));
+      })
+      .catch((err) => console.error("Failed to start Gate:", err));
   }
 
   // 2. Serve Static Web UI
   const distPath = h();
-  const publicPath = existsSync(join(distPath, "index.html")) 
-    ? distPath 
-    : resolve(distPath, "..", "public");
+  const publicPath = existsSync(join(distPath, "index.html")) ? distPath : resolve(distPath, "..", "public");
 
   const serve = sirv(publicPath, { dev: false, single: true });
   const port = 19711;
@@ -1064,11 +1150,10 @@ async function webDash(): Promise<void> {
   });
 }
 
-
 async function tui(): Promise<void> {
   const config = await loadRuntimeConfig({ workspace: process.cwd() });
   const flowBus = new FlowBus();
-  
+
   const runtime = await createRuntime({
     config,
     workspace: process.cwd(),
@@ -1076,7 +1161,7 @@ async function tui(): Promise<void> {
     approvals: process.env.RIMURU_APPROVALS === "1",
     approvalPrompt: async (request) => {
       return { allowed: true, reason: "auto-approved in TUI" };
-    }
+    },
   });
 
   await runInteractiveTui({
@@ -1088,7 +1173,7 @@ async function tui(): Promise<void> {
     workspace: process.cwd(),
     sessionId: config.sessionId,
     provider: config.provider,
-    model: config.model
+    model: config.model,
   });
 }
 
@@ -1109,24 +1194,25 @@ async function agent(args: readonly string[]): Promise<void> {
       const allowed = await promptApproval(`Allow ${request.rune} (${request.risk})?`);
       return { allowed, reason: allowed ? "approved once" : "denied by user" };
     },
-    trace: process.env.RIMURU_TRACE === "1"
+    trace: process.env.RIMURU_TRACE === "1",
   });
-  process.stdout.write(`${JSON.stringify({ observations: result.observations, answer: result.final.response.content }, null, 2)}\n`);
+  process.stdout.write(
+    `${JSON.stringify({ observations: result.observations, answer: result.final.response.content }, null, 2)}\n`,
+  );
 }
-
 
 async function flow(): Promise<void> {
   const config = await loadRuntimeConfig({ workspace: process.cwd() });
   const flowBus = new FlowBus();
-  
+
   process.stdout.write(`Rimuru Flow (Session: \x1b[36m${config.sessionId}\x1b[0m)\nType /exit to quit.\n\n`);
-  
+
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
-    prompt: "\x1b[35mrimuru>\x1b[0m "
+    prompt: "\x1b[35mrimuru>\x1b[0m ",
   });
-  
+
   flowBus.listen((event) => {
     switch (event.type) {
       case "rune.requested":
@@ -1149,7 +1235,7 @@ async function flow(): Promise<void> {
       continue;
     }
     if (prompt === "/exit" || prompt === "/quit") break;
-    
+
     try {
       process.stdout.write("\x1b[32m"); // start streaming color
       await runAgentTurn({
@@ -1164,11 +1250,11 @@ async function flow(): Promise<void> {
           return { allowed, reason: allowed ? "approved by user" : "denied by user" };
         },
         trace: process.env.RIMURU_TRACE === "1",
-        onText: (text) => process.stdout.write(text)
+        onText: (text) => process.stdout.write(text),
       });
       process.stdout.write("\x1b[0m\n\n"); // end streaming color
     } catch (error) {
-       process.stderr.write(`\n\x1b[31mError: ${error instanceof Error ? error.message : String(error)}\x1b[0m\n\n`);
+      process.stderr.write(`\n\x1b[31mError: ${error instanceof Error ? error.message : String(error)}\x1b[0m\n\n`);
     }
     rl.prompt();
   }
@@ -1222,7 +1308,9 @@ async function memory(args: readonly string[]): Promise<void> {
       process.exitCode = 1;
       return;
     }
-    process.stdout.write(`${JSON.stringify(await semantic.remember({ sessionId: config.sessionId, scope: "note", text }), null, 2)}\n`);
+    process.stdout.write(
+      `${JSON.stringify(await semantic.remember({ sessionId: config.sessionId, scope: "note", text }), null, 2)}\n`,
+    );
     return;
   }
   if (subcommand === "semantic-compact") {
@@ -1230,7 +1318,9 @@ async function memory(args: readonly string[]): Promise<void> {
     process.stdout.write("Compacted semantic memory\n");
     return;
   }
-  process.stderr.write("Usage: rimuru memory [list|summary|compact|semantic|search|remember|semantic-compact] [args]\n");
+  process.stderr.write(
+    "Usage: rimuru memory [list|summary|compact|semantic|search|remember|semantic-compact] [args]\n",
+  );
   process.exitCode = 1;
 }
 
@@ -1264,7 +1354,9 @@ async function plugin(args: readonly string[]): Promise<void> {
     return;
   }
   if (subcommand === "install") {
-    process.stderr.write("Usage: create .rimuru/plugins/<name>/rimuru.plugin.json with an entry file; package install is not implemented yet.\n");
+    process.stderr.write(
+      "Usage: create .rimuru/plugins/<name>/rimuru.plugin.json with an entry file; package install is not implemented yet.\n",
+    );
     process.exitCode = 1;
     return;
   }
@@ -1284,12 +1376,15 @@ async function mcp(args: readonly string[]): Promise<void> {
     registry: await createCliRuneRegistry(config.allowedRisks.filter(isRisk), process.env.RIMURU_APPROVALS === "1"),
     workspace: process.cwd(),
     sessionId: config.sessionId,
-    traceStore: new JsonTraceStore(resolve(process.cwd(), ".rimuru", "traces"))
+    traceStore: new JsonTraceStore(resolve(process.cwd(), ".rimuru", "traces")),
   });
 }
 
 async function version(args: readonly string[]): Promise<void> {
-  const pkg = JSON.parse(await readFile(resolve(process.cwd(), "package.json"), "utf8")) as { readonly name?: string; readonly version?: string };
+  const pkg = JSON.parse(await readFile(resolve(process.cwd(), "package.json"), "utf8")) as {
+    readonly name?: string;
+    readonly version?: string;
+  };
   if (args.includes("--json")) process.stdout.write(`${JSON.stringify(pkg, null, 2)}\n`);
   else process.stdout.write(`${pkg.name ?? "rimuru"} ${pkg.version ?? "0.0.0"}\n`);
 }
@@ -1300,11 +1395,20 @@ function pluginSummary(plugin: Awaited<ReturnType<typeof loadPlugins>>[number]):
     version: plugin.manifest.version,
     root: plugin.root,
     entry: plugin.entry ?? null,
-    runes: plugin.runes.map((rune) => ({ name: rune.name, description: rune.description, risk: rune.risk, executable: !rune.description.includes("declared by plugin") }))
+    runes: plugin.runes.map((rune) => ({
+      name: rune.name,
+      description: rune.description,
+      risk: rune.risk,
+      executable: !rune.description.includes("declared by plugin"),
+    })),
   };
 }
 
-async function createCliRuneRegistry(allowedRisks: readonly ("read" | "write" | "execute" | "network")[], approvals: boolean, flowBus = new FlowBus()) {
+async function createCliRuneRegistry(
+  allowedRisks: readonly ("read" | "write" | "execute" | "network")[],
+  approvals: boolean,
+  flowBus = new FlowBus(),
+) {
   return createRuntimeRuneRegistry({
     workspace: process.cwd(),
     allowedRisks,
@@ -1313,18 +1417,19 @@ async function createCliRuneRegistry(allowedRisks: readonly ("read" | "write" | 
     approvalPrompt: async (request) => {
       const allowed = await promptApproval(`Allow ${request.rune} (${request.risk})?`);
       return { allowed, reason: allowed ? "approved once" : "denied by user" };
-    }
+    },
   });
 }
 
 async function fetchGateJson(baseUrl: string, path: string, body?: unknown): Promise<unknown> {
   const response = await fetch(`${baseUrl}${path}`, {
     ...(body === undefined ? {} : { method: "POST", body: JSON.stringify(body) }),
-    headers: { "Content-Type": "application/json" }
+    headers: { "Content-Type": "application/json" },
   });
   const text = await response.text();
   const data = text ? (JSON.parse(text) as unknown) : null;
-  if (!response.ok) throw new Error(isRecord(data) && typeof data.error === "string" ? data.error : response.statusText);
+  if (!response.ok)
+    throw new Error(isRecord(data) && typeof data.error === "string" ? data.error : response.statusText);
   return data;
 }
 
@@ -1358,7 +1463,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function parseProviderArg(value: string): ProviderKind {
-  if (value === "mock" || value === "openai-compatible" || value === "anthropic" || value === "gemini" || value === "ollama" || value === "openrouter") return value;
+  if (
+    value === "mock" ||
+    value === "openai-compatible" ||
+    value === "anthropic" ||
+    value === "gemini" ||
+    value === "ollama" ||
+    value === "openrouter"
+  )
+    return value;
   throw new Error(`Unsupported provider: ${value}`);
 }
 
@@ -1368,10 +1481,17 @@ function parseBarrierArg(value: string): "none" | "readonly" | "docker" | "wasi"
 }
 
 function parseCircleKind(value: string): "local" | "webhook" | "telegram" | "slack" | "discord" | "whatsapp" {
-  if (value === "local" || value === "webhook" || value === "telegram" || value === "slack" || value === "discord" || value === "whatsapp") return value;
+  if (
+    value === "local" ||
+    value === "webhook" ||
+    value === "telegram" ||
+    value === "slack" ||
+    value === "discord" ||
+    value === "whatsapp"
+  )
+    return value;
   throw new Error(`Unsupported Circle kind: ${value}`);
 }
-
 
 function parseArtifactKind(value: string): "markdown" | "html" | "text" | "json" {
   if (value === "markdown" || value === "html" || value === "text" || value === "json") return value;
@@ -1383,39 +1503,39 @@ function help(): void {
   const g = (s: string) => paint(s, ansi.gray);
   const b = (s: string) => paint(s, ansi.bold);
 
-  process.stdout.write([
-    b(" CORE COMMANDS"),
-    `  ${c("init")}         ${g("Initialize a Rimuru workspace (alias: setup, awaken)")}`,
-    `  ${c("dash")}         ${g("View the Sovereign Dashboard (default)")}`,
-    `  ${c("chat")}         ${g("Run a one-off chat turn or start TUI")}`,
-    `  ${c("agent")}        ${g("Run a goal-oriented autonomous agent loop")}`,
-    `  ${c("gate")}         ${g("Manage the Gate API server (start/stop/status)")}`,
-    "",
-    b(" CAPABILITIES"),
-    `  ${c("rune")}         ${g("Invoke a policy-guarded tool (alias: tool)")}`,
-    `  ${c("vault")}        ${g("Manage secrets in the encrypted store")}`,
-    `  ${c("ritual")}       ${g("Schedule automated prompts/tasks")}`,
-    `  ${c("canvas")}       ${g("Manage workspace artifacts (markdown, html)")}`,
-    "",
-    b(" CONCEPTS"),
-    `  ${b("Workspace")}    ${g("The current directory. Everything is scoped here.")}`,
-    `  ${b("Soul")}         ${g("Identity defined in SOUL.md (personality & goal).")}`,
-    `  ${b("Vows")}         ${g("Permissions (read/write/etc) you grant the agent.")}`,
-    `  ${b("Vault")}        ${g("Secure local storage for your API keys.")}`,
-    "",
-    b(" SYSTEM & RECOVERY"),
-    `  ${c("memory")}       ${g("Chronicle and semantic memory management")}`,
-    `  ${c("trace")}        ${g("Inspect or replay redacted execution traces")}`,
-    `  ${c("rollback")}     ${g("Rewind file edits to previous states")}`,
-    `  ${c("doctor")}       ${g("Verify environment and configuration")}`,
-    "",
-    b(" EXTRAS"),
-    `  ${c("mcp")}          ${g("Serve tools over Model Context Protocol")}`,
-    `  ${c("version")}      ${g("Show current version info")}`,
-    "",
-    g(" Run 'rimuru <command> --help' for specific subcommand details."),
-    ""
-  ].join("\n"));
+  process.stdout.write(
+    [
+      b(" CORE COMMANDS"),
+      `  ${c("init")}         ${g("Initialize a Rimuru workspace (alias: setup, awaken)")}`,
+      `  ${c("dash")}         ${g("View the Sovereign Dashboard (default)")}`,
+      `  ${c("chat")}         ${g("Run a one-off chat turn or start TUI")}`,
+      `  ${c("agent")}        ${g("Run a goal-oriented autonomous agent loop")}`,
+      `  ${c("gate")}         ${g("Manage the Gate API server (start/stop/status)")}`,
+      "",
+      b(" CAPABILITIES"),
+      `  ${c("rune")}         ${g("Invoke a policy-guarded tool (alias: tool)")}`,
+      `  ${c("vault")}        ${g("Manage secrets in the encrypted store")}`,
+      `  ${c("ritual")}       ${g("Schedule automated prompts/tasks")}`,
+      `  ${c("canvas")}       ${g("Manage workspace artifacts (markdown, html)")}`,
+      "",
+      b(" CONCEPTS"),
+      `  ${b("Workspace")}    ${g("The current directory. Everything is scoped here.")}`,
+      `  ${b("Soul")}         ${g("Identity defined in SOUL.md (personality & goal).")}`,
+      `  ${b("Vows")}         ${g("Permissions (read/write/etc) you grant the agent.")}`,
+      `  ${b("Vault")}        ${g("Secure local storage for your API keys.")}`,
+      "",
+      b(" SYSTEM & RECOVERY"),
+      `  ${c("memory")}       ${g("Chronicle and semantic memory management")}`,
+      `  ${c("trace")}        ${g("Inspect or replay redacted execution traces")}`,
+      `  ${c("rollback")}     ${g("Rewind file edits to previous states")}`,
+      `  ${c("doctor")}       ${g("Verify environment and configuration")}`,
+      "",
+      b(" EXTRAS"),
+      `  ${c("mcp")}          ${g("Serve tools over Model Context Protocol")}`,
+      `  ${c("version")}      ${g("Show current version info")}`,
+      "",
+      g(" Run 'rimuru <command> --help' for specific subcommand details."),
+      "",
+    ].join("\n"),
+  );
 }
-
-

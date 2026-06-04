@@ -1,6 +1,6 @@
-import { cp, mkdir, readdir, rm, symlink, stat } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
 import { existsSync } from "node:fs";
+import { cp, mkdir, readdir, rm, stat, symlink } from "node:fs/promises";
+import { join, resolve } from "node:path";
 
 export interface BranchOptions {
   readonly ignoreDirs?: readonly string[];
@@ -9,13 +9,17 @@ export interface BranchOptions {
 
 const defaultOptions: BranchOptions = {
   ignoreDirs: [".git", ".rimuru", "dist", "build", "node_modules"],
-  symlinkDirs: ["node_modules"]
+  symlinkDirs: ["node_modules"],
 };
 
 /**
  * Creates a lightweight branch of the workspace by copying source files and symlinking large dependencies.
  */
-export async function createWorkspaceBranch(workspace: string, branchId: string, options: BranchOptions = defaultOptions): Promise<string> {
+export async function createWorkspaceBranch(
+  workspace: string,
+  branchId: string,
+  options: BranchOptions = defaultOptions,
+): Promise<string> {
   const root = resolve(workspace);
   const branchDir = resolve(root, ".rimuru", "branches", branchId);
 
@@ -39,7 +43,11 @@ export async function deleteWorkspaceBranch(workspace: string, branchId: string)
 /**
  * Merges changes from the branch back to the master workspace.
  */
-export async function mergeWorkspaceBranch(workspace: string, branchId: string, options: BranchOptions = defaultOptions): Promise<readonly string[]> {
+export async function mergeWorkspaceBranch(
+  workspace: string,
+  branchId: string,
+  options: BranchOptions = defaultOptions,
+): Promise<readonly string[]> {
   const root = resolve(workspace);
   const branchDir = resolve(root, ".rimuru", "branches", branchId);
   if (!existsSync(branchDir)) throw new Error(`Branch directory does not exist: ${branchDir}`);
@@ -49,7 +57,13 @@ export async function mergeWorkspaceBranch(workspace: string, branchId: string, 
   return mergedFiles;
 }
 
-async function copyDirRecursive(src: string, dest: string, srcRoot: string, destRoot: string, options: BranchOptions): Promise<void> {
+async function copyDirRecursive(
+  src: string,
+  dest: string,
+  srcRoot: string,
+  destRoot: string,
+  options: BranchOptions,
+): Promise<void> {
   const entries = await readdir(src, { withFileTypes: true });
 
   const tasks = entries.map(async (entry) => {
@@ -80,7 +94,14 @@ async function copyDirRecursive(src: string, dest: string, srcRoot: string, dest
   await Promise.all(tasks);
 }
 
-async function mergeDirRecursive(src: string, dest: string, srcRoot: string, destRoot: string, options: BranchOptions, mergedFiles: string[]): Promise<void> {
+async function mergeDirRecursive(
+  src: string,
+  dest: string,
+  srcRoot: string,
+  destRoot: string,
+  options: BranchOptions,
+  mergedFiles: string[],
+): Promise<void> {
   const entries = await readdir(src, { withFileTypes: true });
 
   const tasks = entries.map(async (entry) => {

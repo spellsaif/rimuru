@@ -1,6 +1,6 @@
-import type { Rune } from "../core/types.js";
-import { loadRuntimeConfig } from "../config/runtime-config.js";
 import { circleByName, getCircleAdapter } from "../circles/circles.js";
+import { loadRuntimeConfig } from "../config/runtime-config.js";
+import type { Rune } from "../core/types.js";
 
 export const sendMessageRune: Rune<
   { readonly circle: string; readonly chatId: string; readonly text: string },
@@ -15,15 +15,15 @@ export const sendMessageRune: Rune<
     properties: {
       circle: { type: "string" },
       chatId: { type: "string" },
-      text: { type: "string" }
-    }
+      text: { type: "string" },
+    },
   },
   outputSchema: {
     type: "object",
     required: ["sent"],
     properties: {
-      sent: { type: "boolean" }
-    }
+      sent: { type: "boolean" },
+    },
   },
   async invoke(input, context) {
     const config = await loadRuntimeConfig({ workspace: context.workspace });
@@ -40,5 +40,5 @@ export const sendMessageRune: Rune<
     }
     await adapter.send(circle, input.chatId, input.text);
     return { sent: true };
-  }
+  },
 };

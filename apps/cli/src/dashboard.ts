@@ -45,18 +45,18 @@ function renderBody(model: DashboardModel, leftWidth: number, rightWidth: number
     `${paint(" Model:     ", ansi.gray)}${paint(model.model, ansi.yellow)}`,
     "",
     paint(" ACTIVE CAPABILITIES (RUNES)", ansi.bold, ansi.white),
-    ...(model.runes?.slice(0, 10).map(r => `${paint(" ❯ ", ansi.cyan)}${r}`) ?? [paint(" No runes loaded", ansi.dim)]),
+    ...(model.runes?.slice(0, 10).map((r) => `${paint(" ❯ ", ansi.cyan)}${r}`) ?? [
+      paint(" No runes loaded", ansi.dim),
+    ]),
     "",
     paint(" RECENT SESSIONS", ansi.bold, ansi.white),
-    ...(model.sessions?.slice(-5).map(s => `${paint(" ◔ ", ansi.magenta)}${s}`) ?? [paint(" No history", ansi.dim)])
+    ...(model.sessions?.slice(-5).map((s) => `${paint(" ◔ ", ansi.magenta)}${s}`) ?? [paint(" No history", ansi.dim)]),
   ];
 
   const rightLines = [
     paint(" LIVE FLOW LOG", ansi.bold, ansi.white),
     "",
-    ...(model.events.length > 0 
-      ? model.events.slice(-15).map(renderEvent)
-      : [paint(" No flow events yet", ansi.dim)])
+    ...(model.events.length > 0 ? model.events.slice(-15).map(renderEvent) : [paint(" No flow events yet", ansi.dim)]),
   ];
 
   const maxLines = Math.max(leftLines.length, rightLines.length, 18);
@@ -73,7 +73,11 @@ function renderBody(model: DashboardModel, leftWidth: number, rightWidth: number
 
 function renderFooter(model: DashboardModel, width: number): string {
   const mid = paint(`╠${"═".repeat(width - 2)}╣`, ansi.cyan);
-  const help = paint(`║ ${pad("Press [C] for Chat | [R] to Refresh | [V] for Vault | [Q] to Quit", width - 4)} ║`, ansi.cyan, ansi.dim);
+  const help = paint(
+    `║ ${pad("Press [C] for Chat | [R] to Refresh | [V] for Vault | [Q] to Quit", width - 4)} ║`,
+    ansi.cyan,
+    ansi.dim,
+  );
   const bot = paint(`╚${"═".repeat(width - 2)}╝`, ansi.cyan);
   return [mid, help, bot].join("\n");
 }
@@ -81,13 +85,20 @@ function renderFooter(model: DashboardModel, width: number): string {
 function renderEvent(event: Flow): string {
   const time = paint(event.at.toISOString().slice(11, 19), ansi.gray);
   switch (event.type) {
-    case "run.started": return `${time} ${paint("STARTED ", ansi.bgGreen, ansi.black)} ${event.sessionId}`;
-    case "rune.requested": return `${time} ${paint("INVOKE  ", ansi.bgMagenta, ansi.black)} ${event.rune}`;
-    case "rune.completed": return `${time} ${paint("SUCCESS ", ansi.green)} ${event.rune}`;
-    case "provider.requested": return `${time} ${paint("QUERY   ", ansi.yellow)} ${event.provider}`;
-    case "run.completed": return `${time} ${paint("FINISHED", ansi.bgGreen, ansi.black)} ${event.sessionId}`;
-    case "rune.denied": return `${time} ${paint("DENIED  ", ansi.bgRed, ansi.white)} ${event.rune}`;
-    default: return `${time} ${paint("EVENT   ", ansi.dim)} ${event.type}`;
+    case "run.started":
+      return `${time} ${paint("STARTED ", ansi.bgGreen, ansi.black)} ${event.sessionId}`;
+    case "rune.requested":
+      return `${time} ${paint("INVOKE  ", ansi.bgMagenta, ansi.black)} ${event.rune}`;
+    case "rune.completed":
+      return `${time} ${paint("SUCCESS ", ansi.green)} ${event.rune}`;
+    case "provider.requested":
+      return `${time} ${paint("QUERY   ", ansi.yellow)} ${event.provider}`;
+    case "run.completed":
+      return `${time} ${paint("FINISHED", ansi.bgGreen, ansi.black)} ${event.sessionId}`;
+    case "rune.denied":
+      return `${time} ${paint("DENIED  ", ansi.bgRed, ansi.white)} ${event.rune}`;
+    default:
+      return `${time} ${paint("EVENT   ", ansi.dim)} ${event.type}`;
   }
 }
 
@@ -116,20 +127,20 @@ export function renderFullScreenTui(model: FullScreenTuiModel, width: number, he
   const header = paint(`║ === ${model.title.toUpperCase()} ===`, ansi.cyan, ansi.bold);
   const info = paint(`║ Provider/Model: ${model.provider}/${model.model} | Session: ${model.sessionId}`, ansi.green);
   const workspace = paint(`║ Workspace: ${model.workspace}`, ansi.gray);
-  
+
   const conversationLines = [
     paint("╟─ Conversation ────────────────────────────────────────", ansi.cyan),
-    ...model.transcript.map(t => paint(`║  [${t.role.toUpperCase()}] ${t.content}`, ansi.white))
+    ...model.transcript.map((t) => paint(`║  [${t.role.toUpperCase()}] ${t.content}`, ansi.white)),
   ];
 
   const chronicleLines = [
     paint("╟─ Chronicle & Sessions ────────────────────────────────", ansi.cyan),
-    ...(model.sessions ?? []).map(s => paint(`║  • ${s}`, ansi.magenta))
+    ...(model.sessions ?? []).map((s) => paint(`║  • ${s}`, ansi.magenta)),
   ];
 
   const traceLines = [
     paint("╟─ Traces ──────────────────────────────────────────────", ansi.cyan),
-    ...(model.traces ?? []).map(t => paint(`║  • ${t}`, ansi.yellow))
+    ...(model.traces ?? []).map((t) => paint(`║  • ${t}`, ansi.yellow)),
   ];
 
   const statusLine = paint(`║ Status: ${model.status} | Mode: ${model.mode} | Input: ${model.input}`, ansi.blue);
@@ -144,7 +155,6 @@ export function renderFullScreenTui(model: FullScreenTuiModel, width: number, he
     ...traceLines,
     paint(`╟${"─".repeat(Math.max(40, width - 2))}╢`, ansi.cyan),
     statusLine,
-    paint(`╚${"═".repeat(Math.max(40, width - 2))}╝`, ansi.cyan)
+    paint(`╚${"═".repeat(Math.max(40, width - 2))}╝`, ansi.cyan),
   ].join("\n");
 }
-

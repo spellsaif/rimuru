@@ -22,9 +22,9 @@ describe("CLI Wizard & Diagnostics Onboarding", () => {
         barrier: "none",
         circles: [
           { name: "local", kind: "local", enabled: true },
-          { name: "my-slack", kind: "slack", enabled: true, token: "xoxb-test", signingSecret: "secret-test" }
+          { name: "my-slack", kind: "slack", enabled: true, token: "xoxb-test", signingSecret: "secret-test" },
         ],
-        force: true
+        force: true,
       });
 
       expect(existsSync(result.configPath)).toBe(true);
@@ -41,7 +41,7 @@ describe("CLI Wizard & Diagnostics Onboarding", () => {
         kind: "slack",
         enabled: true,
         token: "xoxb-test",
-        signingSecret: "secret-test"
+        signingSecret: "secret-test",
       });
 
       // Verify that missing folders are created

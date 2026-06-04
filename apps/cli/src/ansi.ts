@@ -25,7 +25,7 @@ export const ansi = {
   hideCursor: "\u001B[?25l",
   showCursor: "\u001B[?25h",
   altBuffer: "\u001B[?1049h",
-  mainBuffer: "\u001B[?1049l"
+  mainBuffer: "\u001B[?1049l",
 } as const;
 
 export function paint(value: string, ...codes: readonly string[]): string {
@@ -83,12 +83,19 @@ export function paintMarkdown(content: string): string {
 
       // Parse Table Data
       const tableData = tableLines
-        .filter(l => !/^\|[|\-:\s]+\|$/.test(l)) // Filter out separators
-        .map(l => l.split("|").filter((_, idx, arr) => idx > 0 && idx < arr.length - 1).map(c => c.trim()));
+        .filter((l) => !/^\|[|\-:\s]+\|$/.test(l)) // Filter out separators
+        .map((l) =>
+          l
+            .split("|")
+            .filter((_, idx, arr) => idx > 0 && idx < arr.length - 1)
+            .map((c) => c.trim()),
+        );
 
       if (tableData.length > 0) {
         // Calculate Max Widths
-        const colWidths = tableData[0].map((_, colIdx) => Math.max(...tableData.map(row => stripAnsi(paintMarkdown(row[colIdx] || "")).length)));
+        const colWidths = tableData[0].map((_, colIdx) =>
+          Math.max(...tableData.map((row) => stripAnsi(paintMarkdown(row[colIdx] || "")).length)),
+        );
 
         // Render Table
         tableData.forEach((row, rowIdx) => {
@@ -104,7 +111,10 @@ export function paintMarkdown(content: string): string {
 
           // Add separator after header
           if (isHeader) {
-            const sep = paint("├", ansi.cyan) + colWidths.map(w => "─".repeat(w + 2)).join(paint("┼", ansi.cyan)) + paint("┤", ansi.cyan);
+            const sep =
+              paint("├", ansi.cyan) +
+              colWidths.map((w) => "─".repeat(w + 2)).join(paint("┼", ansi.cyan)) +
+              paint("┤", ansi.cyan);
             result.push(sep);
           }
         });
@@ -128,5 +138,3 @@ export function paintMarkdown(content: string): string {
 
   return result.join("\n");
 }
-
-

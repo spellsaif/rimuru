@@ -11,7 +11,7 @@ import {
   Sovereign,
   workspaceRune,
   mergeWorkspaceBranch,
-  deleteWorkspaceBranch
+  deleteWorkspaceBranch,
 } from "../src/index.js";
 
 describe("AgentLoop speculative branching", () => {
@@ -30,7 +30,7 @@ describe("AgentLoop speculative branching", () => {
       // Pre-populate parent session history
       await chronicle.append("parent-session", [
         { role: "user", content: "hello world", createdAt: new Date() },
-        { role: "assistant", content: "hello parent", createdAt: new Date() }
+        { role: "assistant", content: "hello parent", createdAt: new Date() },
       ]);
 
       const loop = new AgentLoop({
@@ -38,7 +38,7 @@ describe("AgentLoop speculative branching", () => {
         runes: registry,
         workspace: root,
         sessionId: "parent-session",
-        chronicle
+        chronicle,
       });
 
       // 3. Run speculation
@@ -78,7 +78,6 @@ describe("AgentLoop speculative branching", () => {
       // 5. Clean up speculative branch
       await deleteWorkspaceBranch(root, childSessionId);
       expect(existsSync(branchDir)).toBe(false);
-
     } finally {
       await rm(root, { recursive: true, force: true });
     }

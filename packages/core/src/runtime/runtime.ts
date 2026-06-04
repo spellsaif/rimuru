@@ -1,25 +1,24 @@
-import { resolve } from "node:path";
 import { createHash } from "node:crypto";
+import { resolve } from "node:path";
 import { AgentLoop, type AgentRunResult } from "../agent/agent.js";
 import type { RuntimeConfig } from "../config/runtime-config.js";
 import { JsonChronicle } from "../core/chronicle.js";
 import { FlowBus } from "../core/events.js";
 import { ApprovalPermissionPolicy, StaticPermissionPolicy } from "../core/permissions.js";
 import { RuneRegistry, workspaceRune } from "../core/runes.js";
+import { Sovereign } from "../core/sovereign.js";
 import { JsonTraceStore } from "../core/trace.js";
-import type { PermissionDecision, PermissionRequest, RuneRisk, RunResult } from "../core/types.js";
+import type { PermissionDecision, PermissionRequest, RunResult, RuneRisk } from "../core/types.js";
 import { createSemanticMemory, semanticMemoryRunes } from "../memory/semantic.js";
 import { registerPlugins } from "../plugins/manifest.js";
 import { createShard } from "../providers/factory.js";
+import { sendMessageRune } from "../runes/circle.js";
 import { gitRunes } from "../runes/git.js";
 import { workspaceRunes } from "../runes/workspace.js";
-import { sendMessageRune } from "../runes/circle.js";
-import { Sovereign } from "../core/sovereign.js";
-import { loadSoul, discoverWorkspaceRunes, discoverSandboxedRunes } from "./discovery.js";
+import { discoverSandboxedRunes, discoverWorkspaceRunes, loadSoul } from "./discovery.js";
 export { discoverSandboxedRunes };
 import { vesselsRunes } from "../runes/vessels-rune.js";
 import { webRunes } from "../runes/web.js";
-
 
 export interface RuntimePaths {
   readonly workspace: string;
@@ -75,7 +74,9 @@ const MAX_CACHE_SIZE = 50;
 
 export async function createRuntime(options: CreateRuntimeOptions): Promise<RuntimeServices> {
   const configHash = createHash("sha256")
-    .update(`${options.workspace}:${options.approvals ?? false}:${options.systemPrompt ?? ""}:${JSON.stringify(options.config)}`)
+    .update(
+      `${options.workspace}:${options.approvals ?? false}:${options.systemPrompt ?? ""}:${JSON.stringify(options.config)}`,
+    )
     .digest("hex");
   const cached = runtimeCache.get(configHash);
   if (cached) return cached;
@@ -88,16 +89,21 @@ export async function createRuntime(options: CreateRuntimeOptions): Promise<Runt
     allowedRisks: options.config.allowedRisks.filter(isRisk),
     flowBus,
     approvals: options.approvals ?? false,
-    ...(options.approvalPrompt ? { approvalPrompt: options.approvalPrompt } : {})
+    ...(options.approvalPrompt ? { approvalPrompt: options.approvalPrompt } : {}),
   });
-  const soul = options.systemPrompt ?? await loadSoul(options.workspace);
+  const soul = options.systemPrompt ?? (await loadSoul(options.workspace));
   const runtime = {
     paths,
     flowBus,
     chronicle,
     traceStore: new JsonTraceStore(paths.traceDir),
     runes,
-    sovereign: new Sovereign({ shard: createShard(options.config), chronicle, flowBus, ...(soul ? { systemPrompt: soul } : {}) })
+    sovereign: new Sovereign({
+      shard: createShard(options.config),
+      chronicle,
+      flowBus,
+      ...(soul ? { systemPrompt: soul } : {}),
+    }),
   };
 
   if (runtimeCache.size >= MAX_CACHE_SIZE) {
@@ -124,7 +130,7 @@ export async function createRuntimeRuneRegistry(options: {
         ? new ApprovalPermissionPolicy({ fallback: staticPolicy, prompt: options.approvalPrompt })
         : staticPolicy,
     emit: (event) => options.flowBus?.emit(event),
-    flowBus: options.flowBus
+    flowBus: options.flowBus,
   });
   registry.register(workspaceRune);
   registry.register(sendMessageRune);
@@ -132,7 +138,8 @@ export async function createRuntimeRuneRegistry(options: {
   for (const gitRune of gitRunes) registry.register(gitRune);
   for (const vesselsRune of vesselsRunes) registry.register(vesselsRune);
   for (const webRune of webRunes) registry.register(webRune);
-  for (const memoryRune of semanticMemoryRunes(createSemanticMemory(resolve(options.workspace, ".rimuru")))) registry.register(memoryRune);
+  for (const memoryRune of semanticMemoryRunes(createSemanticMemory(resolve(options.workspace, ".rimuru"))))
+    registry.register(memoryRune);
   for (const workspaceSkill of await discoverWorkspaceRunes(options.workspace)) registry.register(workspaceSkill);
   for (const sandboxedRune of await discoverSandboxedRunes(options.workspace)) registry.register(sandboxedRune);
   await registerPlugins(registry, resolve(options.workspace, ".rimuru", "plugins"));
@@ -145,10 +152,25 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<RunResult> 
   let lastError: unknown;
   for (const config of runtimeConfigAttempts(options.config)) {
     try {
-      const runtime = await createRuntime({ config, workspace: options.workspace, ...(options.flowBus ? { flowBus: options.flowBus } : {}) });
-      const result = await runtime.sovereign.run({ prompt: options.prompt, workspace: options.workspace, sessionId, ...(options.onText ? { onText: options.onText } : {}) });
+      const runtime = await createRuntime({
+        config,
+        workspace: options.workspace,
+        ...(options.flowBus ? { flowBus: options.flowBus } : {}),
+      });
+      const result = await runtime.sovereign.run({
+        prompt: options.prompt,
+        workspace: options.workspace,
+        sessionId,
+        ...(options.onText ? { onText: options.onText } : {}),
+      });
       await createSemanticMemory(runtime.paths.rimuruDir).indexChronicle(sessionId, runtime.chronicle);
-      if (options.trace) await runtime.traceStore.save({ sessionId, createdAt: new Date(), messages: result.transcript, events: result.events });
+      if (options.trace)
+        await runtime.traceStore.save({
+          sessionId,
+          createdAt: new Date(),
+          messages: result.transcript,
+          events: result.events,
+        });
       return result;
     } catch (error) {
       lastError = error;
@@ -165,21 +187,27 @@ export async function runAgentTurn(options: AgentTurnOptions): Promise<AgentRunR
     systemPrompt: options.systemPrompt,
     ...(options.flowBus ? { flowBus: options.flowBus } : {}),
     ...(options.approvals === undefined ? {} : { approvals: options.approvals }),
-    ...(options.approvalPrompt ? { approvalPrompt: options.approvalPrompt } : {})
+    ...(options.approvalPrompt ? { approvalPrompt: options.approvalPrompt } : {}),
   });
-  const loop = new AgentLoop({ 
-    sovereign: runtime.sovereign, 
-    runes: runtime.runes, 
-    workspace: options.workspace, 
-    sessionId, 
+  const loop = new AgentLoop({
+    sovereign: runtime.sovereign,
+    runes: runtime.runes,
+    workspace: options.workspace,
+    sessionId,
     audit: true,
     flowBus: options.flowBus,
-    chronicle: runtime.chronicle
+    chronicle: runtime.chronicle,
   });
 
   const result = await loop.run(options.objective, options.onText);
   await createSemanticMemory(runtime.paths.rimuruDir).indexChronicle(sessionId, runtime.chronicle);
-  if (options.trace) await runtime.traceStore.save({ sessionId, createdAt: new Date(), messages: result.final.transcript, events: result.final.events });
+  if (options.trace)
+    await runtime.traceStore.save({
+      sessionId,
+      createdAt: new Date(),
+      messages: result.final.transcript,
+      events: result.final.events,
+    });
   return result;
 }
 
@@ -190,7 +218,7 @@ export function runtimePaths(config: RuntimeConfig, workspace: string): RuntimeP
     memoryDir: resolve(config.memoryDir),
     rimuruDir,
     traceDir: resolve(rimuruDir, "traces"),
-    pluginDir: resolve(rimuruDir, "plugins")
+    pluginDir: resolve(rimuruDir, "plugins"),
   };
 }
 
@@ -207,7 +235,7 @@ function runtimeConfigAttempts(config: RuntimeConfig): readonly RuntimeConfig[] 
       provider: fallback.provider,
       model: fallback.model ?? config.model,
       ...(fallback.baseUrl ? { baseUrl: fallback.baseUrl } : "baseUrl" in config ? { baseUrl: config.baseUrl } : {}),
-      ...(fallback.apiKey ? { apiKey: fallback.apiKey } : "apiKey" in config ? { apiKey: config.apiKey } : {})
-    }))
+      ...(fallback.apiKey ? { apiKey: fallback.apiKey } : "apiKey" in config ? { apiKey: config.apiKey } : {}),
+    })),
   ];
 }

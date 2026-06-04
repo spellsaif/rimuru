@@ -7,27 +7,27 @@
 .dark {
   --background: 0 0% 4%;
   --foreground: 0 0% 98%;
-  
+
   --muted: 0 0% 12%;
   --muted-foreground: 0 0% 65%;
-  
+
   --popover: 0 0% 7%;
   --popover-foreground: 0 0% 98%;
-  
+
   --card: 0 0% 8%;
   --card-foreground: 0 0% 98%;
-  
+
   --border: 0 0% 15%;
   --input: 0 0% 15%;
-  
+
   --primary: 0 0% 98%;
   --primary-foreground: 0 0% 9%;
-  
+
   --accent: 0 0% 15%;
   --accent-foreground: 0 0% 98%;
-  
+
   --ring: 0 0% 100%;
-  
+
   /* Zen Theme Tokens */
   --zen-bg: #0a0a0a;
   --zen-card: #121212;
@@ -70,7 +70,6 @@ body {
   font-weight: 800;
 }
 
-
 .slime-page {
   position: relative;
   min-height: 100vh;
@@ -81,9 +80,8 @@ body {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background-image: 
-    linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
   background-size: 40px 40px;
   mask-image: radial-gradient(circle at 50% 50%, black, transparent 80%);
   z-index: -1;
@@ -167,7 +165,7 @@ body {
 }
 
 .button.ghost:hover {
-  background: rgba(255,255,255,0.05);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .feature-grid {

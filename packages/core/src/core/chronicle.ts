@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readdir, readFile, writeFile, rm } from "node:fs/promises";
+import { appendFile, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { Chronicle, Message } from "./types.js";
 
@@ -34,9 +34,10 @@ export class JsonChronicle implements Chronicle {
     const path = this.pathFor(sessionId);
     try {
       const raw = await readFile(path, "utf8");
-      return raw.split("\n")
-        .filter(line => line.trim().length > 0)
-        .map(line => deserializeMessage(JSON.parse(line)));
+      return raw
+        .split("\n")
+        .filter((line) => line.trim().length > 0)
+        .map((line) => deserializeMessage(JSON.parse(line)));
     } catch (error) {
       if (isMissingFile(error)) return [];
       throw error;
@@ -46,16 +47,16 @@ export class JsonChronicle implements Chronicle {
   async append(sessionId: string, messages: readonly Message[]): Promise<void> {
     const path = this.pathFor(sessionId);
     await mkdir(dirname(path), { recursive: true });
-    
-    const lines = messages.map(m => JSON.stringify(serializeMessage(m))).join("\n") + "\n";
+
+    const lines = messages.map((m) => JSON.stringify(serializeMessage(m))).join("\n") + "\n";
     await appendFile(path, lines, "utf8");
   }
 
   async overwrite(sessionId: string, messages: readonly Message[]): Promise<void> {
     const path = this.pathFor(sessionId);
     await mkdir(dirname(path), { recursive: true });
-    
-    const content = messages.map(m => JSON.stringify(serializeMessage(m))).join("\n") + "\n";
+
+    const content = messages.map((m) => JSON.stringify(serializeMessage(m))).join("\n") + "\n";
     await writeFile(path, content, "utf8");
   }
 
@@ -69,7 +70,10 @@ export class JsonChronicle implements Chronicle {
   async listSessions(): Promise<readonly string[]> {
     try {
       const entries = await readdir(this.root);
-      return entries.filter((entry) => entry.endsWith(".jsonl")).map((entry) => entry.slice(0, -6)).sort();
+      return entries
+        .filter((entry) => entry.endsWith(".jsonl"))
+        .map((entry) => entry.slice(0, -6))
+        .sort();
     } catch (error) {
       if (isMissingFile(error)) return [];
       throw error;
@@ -87,15 +91,16 @@ export class JsonChronicle implements Chronicle {
   async compact(sessionId: string, keepLast = 20): Promise<void> {
     const messages = await this.load(sessionId);
     if (messages.length <= keepLast) return;
-    
-    const summary: Message = { 
-      role: "system", 
-      content: `Chronicle compacted at ${new Date().toISOString()}. Previous state: ${await this.summarize(sessionId)}`, 
-      createdAt: new Date() 
+
+    const summary: Message = {
+      role: "system",
+      content: `Chronicle compacted at ${new Date().toISOString()}. Previous state: ${await this.summarize(sessionId)}`,
+      createdAt: new Date(),
     };
-    
+
     const path = this.pathFor(sessionId);
-    const content = [summary, ...messages.slice(-keepLast)].map(m => JSON.stringify(serializeMessage(m))).join("\n") + "\n";
+    const content =
+      [summary, ...messages.slice(-keepLast)].map((m) => JSON.stringify(serializeMessage(m))).join("\n") + "\n";
     await writeFile(path, content, "utf8");
   }
 
@@ -117,7 +122,7 @@ function serializeMessage(message: Message): SerializedMessage {
     role: message.role,
     content: message.content,
     ...(message.name === undefined ? {} : { name: message.name }),
-    createdAt: message.createdAt.toISOString()
+    createdAt: message.createdAt.toISOString(),
   };
 }
 
@@ -126,7 +131,7 @@ function deserializeMessage(message: SerializedMessage): Message {
     role: message.role,
     content: message.content,
     ...(message.name === undefined ? {} : { name: message.name }),
-    createdAt: new Date(message.createdAt)
+    createdAt: new Date(message.createdAt),
   };
 }
 

@@ -37,7 +37,10 @@ export async function appendAuditEvent(workspace: string, event: NewAuditEvent):
   }
 }
 
-export async function listAuditEvents(workspace: string, options: { readonly limit?: number } = {}): Promise<readonly AuditEvent[]> {
+export async function listAuditEvents(
+  workspace: string,
+  options: { readonly limit?: number } = {},
+): Promise<readonly AuditEvent[]> {
   try {
     const lines = (await readFile(auditLogPath(workspace), "utf8")).split("\n").filter(Boolean);
     return lines
@@ -61,7 +64,7 @@ function normalizeAuditEvent(event: NewAuditEvent): AuditEvent {
     ...(event.reason === undefined ? {} : { reason: redactSecrets(event.reason) }),
     ...(event.input === undefined ? {} : { input: redactedJsonValue(event.input) }),
     ...(event.output === undefined ? {} : { output: redactedJsonValue(event.output) }),
-    ...(event.error === undefined ? {} : { error: redactSecrets(event.error) })
+    ...(event.error === undefined ? {} : { error: redactSecrets(event.error) }),
   };
 }
 

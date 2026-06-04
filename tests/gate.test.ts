@@ -18,7 +18,7 @@ describe("getGateStatus", () => {
       vessels: {},
       fallbackShards: [],
       circles: [{ name: "local", kind: "local", enabled: true }],
-      gatewayPort: 19710
+      gatewayPort: 19710,
     };
 
     expect(getGateStatus(config, "/workspace")).toEqual({
@@ -29,7 +29,7 @@ describe("getGateStatus", () => {
       shard: "mock",
       model: "mock",
       vows: ["read", "write"],
-      barrier: "readonly"
+      barrier: "readonly",
     });
   });
 
@@ -38,7 +38,14 @@ describe("getGateStatus", () => {
     const config = runtimeConfig();
     try {
       await expect(getGateRuntimeStatus(config, root)).resolves.toMatchObject({ runtime: "stopped" });
-      await writeGateState(root, { pid: process.pid, url: "http://127.0.0.1:19710", host: "127.0.0.1", port: 19710, workspace: root, startedAt: new Date(0).toISOString() });
+      await writeGateState(root, {
+        pid: process.pid,
+        url: "http://127.0.0.1:19710",
+        host: "127.0.0.1",
+        port: 19710,
+        workspace: root,
+        startedAt: new Date(0).toISOString(),
+      });
       await expect(readGateState(root)).resolves.toMatchObject({ pid: process.pid, url: "http://127.0.0.1:19710" });
       await expect(getGateRuntimeStatus(config, root)).resolves.toMatchObject({ runtime: "running", pid: process.pid });
     } finally {
@@ -59,6 +66,6 @@ function runtimeConfig(): RuntimeConfig {
     vessels: {},
     fallbackShards: [],
     circles: [{ name: "local", kind: "local", enabled: true }],
-    gatewayPort: 19710
+    gatewayPort: 19710,
   };
 }

@@ -2,14 +2,36 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { approvePairing, createCanvasArtifact, createRitual, getVaultSecret, getCircleAdapter, listCanvasArtifacts, listPairings, listRituals, listVaultSecrets, listVessels, loadRuntimeConfig, requestPairing, setVaultSecret, validateRuntimeConfig } from "../src/index.js";
+import {
+  approvePairing,
+  createCanvasArtifact,
+  createRitual,
+  getVaultSecret,
+  getCircleAdapter,
+  listCanvasArtifacts,
+  listPairings,
+  listRituals,
+  listVaultSecrets,
+  listVessels,
+  loadRuntimeConfig,
+  requestPairing,
+  setVaultSecret,
+  validateRuntimeConfig,
+} from "../src/index.js";
 import { setupWorkspace } from "../apps/cli/src/setup.ts";
 
 describe("platform spine", () => {
   it("sets up a workspace with vessel config", async () => {
     const root = await mkdtemp(join(tmpdir(), "rimuru-setup-"));
     try {
-      const result = await setupWorkspace({ workspace: root, provider: "mock", vessel: "coding", soul: "work", vows: ["read", "write"], barrier: "readonly" });
+      const result = await setupWorkspace({
+        workspace: root,
+        provider: "mock",
+        vessel: "coding",
+        soul: "work",
+        vows: ["read", "write"],
+        barrier: "readonly",
+      });
       const raw = await readFile(result.configPath, "utf8");
       expect(raw).toContain("coding");
 
@@ -31,13 +53,18 @@ describe("platform spine", () => {
 
       const pending = await requestPairing(root, "telegram", "alice");
       await expect(approvePairing(root, pending.code)).resolves.toMatchObject({ circle: "telegram", from: "alice" });
-      await expect(listPairings(root)).resolves.toMatchObject({ pending: [], allowed: [expect.objectContaining({ from: "alice" })] });
+      await expect(listPairings(root)).resolves.toMatchObject({
+        pending: [],
+        allowed: [expect.objectContaining({ from: "alice" })],
+      });
 
       await createRitual(root, { id: "daily", prompt: "summarize", sessionId: "default", everyMinutes: 60 });
       await expect(listRituals(root)).resolves.toEqual([expect.objectContaining({ id: "daily" })]);
 
       await createCanvasArtifact(root, { title: "plan", kind: "markdown", content: "# Plan" });
-      await expect(listCanvasArtifacts(root)).resolves.toEqual([expect.objectContaining({ title: "plan", kind: "markdown" })]);
+      await expect(listCanvasArtifacts(root)).resolves.toEqual([
+        expect.objectContaining({ title: "plan", kind: "markdown" }),
+      ]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -46,12 +73,30 @@ describe("platform spine", () => {
   it("validates production configuration and normalizes Discord events", async () => {
     const root = await mkdtemp(join(tmpdir(), "rimuru-validate-"));
     try {
-      await setupWorkspace({ workspace: root, provider: "openai-compatible", vows: ["read", "execute"], barrier: "none", circles: [{ name: "discord", kind: "discord", enabled: true }] });
+      await setupWorkspace({
+        workspace: root,
+        provider: "openai-compatible",
+        vows: ["read", "execute"],
+        barrier: "none",
+        circles: [{ name: "discord", kind: "discord", enabled: true }],
+      });
       const config = await loadRuntimeConfig({ workspace: root, env: {} });
 
-      expect(validateRuntimeConfig(config, {})).toEqual(expect.arrayContaining([expect.objectContaining({ code: "provider.missing_api_key" }), expect.objectContaining({ code: "policy.unbarriered_power" })]));
-      expect(getCircleAdapter("discord")!.normalize({ name: "discord", kind: "discord" }, { content: "hello", author: { username: "alice" } })).toMatchObject({ circle: "discord", from: "alice", text: "hello" });
-      expect(getCircleAdapter("discord")!.normalize({ name: "discord", kind: "discord" }, { type: 1 })).toEqual({ pong: true });
+      expect(validateRuntimeConfig(config, {})).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ code: "provider.missing_api_key" }),
+          expect.objectContaining({ code: "policy.unbarriered_power" }),
+        ]),
+      );
+      expect(
+        getCircleAdapter("discord")!.normalize(
+          { name: "discord", kind: "discord" },
+          { content: "hello", author: { username: "alice" } },
+        ),
+      ).toMatchObject({ circle: "discord", from: "alice", text: "hello" });
+      expect(getCircleAdapter("discord")!.normalize({ name: "discord", kind: "discord" }, { type: 1 })).toEqual({
+        pong: true,
+      });
     } finally {
       await rm(root, { recursive: true, force: true });
     }

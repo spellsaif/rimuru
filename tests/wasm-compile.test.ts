@@ -12,7 +12,7 @@ describe("WASM/JS synthesis and compilation engine", () => {
       const context = {
         workspace: root,
         sessionId: "test-ts-session",
-        allowedRisks: ["read", "write", "execute"] as any
+        allowedRisks: ["read", "write", "execute"] as any,
       };
 
       const sourceCode = `
@@ -21,12 +21,15 @@ describe("WASM/JS synthesis and compilation engine", () => {
       `;
 
       // Call the compileWasm Rune
-      const result = await compileWasmRune.invoke({
-        language: "typescript",
-        sourceCode,
-        name: "double_tool",
-        description: "Doubles input values"
-      }, context as any);
+      const result = await compileWasmRune.invoke(
+        {
+          language: "typescript",
+          sourceCode,
+          name: "double_tool",
+          description: "Doubles input values",
+        },
+        context as any,
+      );
 
       expect(result.path).toContain("double_tool.js");
       expect(result.configPath).toContain("double_tool.json");
@@ -57,7 +60,7 @@ describe("WASM/JS synthesis and compilation engine", () => {
       const context = {
         workspace: root,
         sessionId: "test-rust-session",
-        allowedRisks: ["read", "write", "execute"] as any
+        allowedRisks: ["read", "write", "execute"] as any,
       };
 
       // Rust code that reads stdin and echoes back a JSON structure
@@ -71,12 +74,15 @@ describe("WASM/JS synthesis and compilation engine", () => {
       `;
 
       // Call the compileWasm Rune
-      const result = await compileWasmRune.invoke({
-        language: "rust",
-        sourceCode,
-        name: "rust_echo",
-        description: "Echoes input via WASI"
-      }, context as any);
+      const result = await compileWasmRune.invoke(
+        {
+          language: "rust",
+          sourceCode,
+          name: "rust_echo",
+          description: "Echoes input via WASI",
+        },
+        context as any,
+      );
 
       expect(result.path).toContain("rust_echo.wasm");
       expect(result.configPath).toContain("rust_echo.json");
@@ -90,7 +96,7 @@ describe("WASM/JS synthesis and compilation engine", () => {
       // Invoke the discovered rune with a structured object
       // It passes the JSON input to stdin and parses the returned JSON output
       const inputVal = { message: "Attested sovereign execution" };
-      
+
       const t1 = performance.now();
       const output = await rune.invoke(inputVal, context as any);
       const firstDuration = performance.now() - t1;
@@ -113,7 +119,10 @@ describe("WASM/JS synthesis and compilation engine", () => {
     let originalKey: string | null = null;
     try {
       try {
-        originalKey = execSync("secret-tool lookup app rimuru", { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+        originalKey = execSync("secret-tool lookup app rimuru", {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+        }).trim();
       } catch {}
 
       // Temporarily store a key in the OS keychain using secret-tool
@@ -125,7 +134,6 @@ describe("WASM/JS synthesis and compilation engine", () => {
       await setVaultSecret(root, "my_api_key", "attested-value", emptyEnv);
       const retrieved = await getVaultSecret(root, "my_api_key", emptyEnv);
       expect(retrieved).toBe("attested-value");
-
     } finally {
       // Clean up / restore original keychain entry
       if (originalKey) {

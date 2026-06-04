@@ -55,13 +55,16 @@ describe("Workspace fileTree & Web Runes", () => {
       </html>
     `;
 
-    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
-      expect(url).toContain("duckduckgo.com");
-      return {
-        ok: true,
-        text: async () => mockHtml
-      };
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        expect(url).toContain("duckduckgo.com");
+        return {
+          ok: true,
+          text: async () => mockHtml,
+        };
+      }),
+    );
 
     const result = await webSearchRune.invoke({ query: "vitest testing" }, { workspace: "/tmp", sessionId: "s" });
 
@@ -69,12 +72,12 @@ describe("Workspace fileTree & Web Runes", () => {
     expect(result.results[0]).toEqual({
       title: "Page One Title",
       snippet: "Snippet for page one describing the content.",
-      url: "https://example.com/one"
+      url: "https://example.com/one",
     });
     expect(result.results[1]).toEqual({
       title: "Page Two Title",
       snippet: "Snippet for page two.",
-      url: "https://example.com/two"
+      url: "https://example.com/two",
     });
   });
 
@@ -96,15 +99,21 @@ describe("Workspace fileTree & Web Runes", () => {
       </html>
     `;
 
-    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
-      expect(url).toBe("https://sample.com/page");
-      return {
-        ok: true,
-        text: async () => mockHtml
-      };
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        expect(url).toBe("https://sample.com/page");
+        return {
+          ok: true,
+          text: async () => mockHtml,
+        };
+      }),
+    );
 
-    const result = await webFetchUrlRune.invoke({ url: "https://sample.com/page" }, { workspace: "/tmp", sessionId: "s" });
+    const result = await webFetchUrlRune.invoke(
+      { url: "https://sample.com/page" },
+      { workspace: "/tmp", sessionId: "s" },
+    );
 
     expect(result.title).toBe("My Sample Webpage");
     expect(result.content).toContain("# Welcome to Sample");

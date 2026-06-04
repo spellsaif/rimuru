@@ -5,8 +5,8 @@ import { getQuickJS } from "quickjs-emscripten";
  * Exposes the `input` variable to the script and returns the result (either via return value or by setting `globalThis.output`).
  */
 export async function executeDynamicRune(code: string, input: unknown): Promise<unknown> {
-  const QuickJS = await getQuickJS();
-  const vm = QuickJS.newContext();
+  const quickJs = await getQuickJS();
+  const vm = quickJs.newContext();
   try {
     // Inject input safely as JSON to avoid injection strings inside the script
     const vmInput = vm.newString(JSON.stringify(input));

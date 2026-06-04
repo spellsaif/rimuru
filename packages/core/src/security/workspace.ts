@@ -1,4 +1,4 @@
-import { relative, resolve, sep, parse } from "node:path";
+import { parse, relative, resolve, sep } from "node:path";
 
 export function resolveWorkspacePath(workspace: string, path: string): string {
   const root = resolve(workspace);
@@ -15,14 +15,19 @@ export function resolveWorkspacePath(workspace: string, path: string): string {
 
   // Sovereign Blindspot: Forbid AI from reading its own internal secrets
   const normalizedRel = rel.replace(/\\/g, "/");
-  const sensitivePaths = [".rimuru/circles", ".rimuru/vault.json", ".rimuru/pairings.json", ".rimuru/gate-state.json", "rimuru.config.json"];
-  if (sensitivePaths.some(p => normalizedRel === p || normalizedRel.startsWith(`${p}/`))) {
+  const sensitivePaths = [
+    ".rimuru/circles",
+    ".rimuru/vault.json",
+    ".rimuru/pairings.json",
+    ".rimuru/gate-state.json",
+    "rimuru.config.json",
+  ];
+  if (sensitivePaths.some((p) => normalizedRel === p || normalizedRel.startsWith(`${p}/`))) {
     throw new Error(`Access to sensitive Sovereign internal path denied: ${rel}`);
   }
 
   return resolved;
 }
-
 
 export function assertCommandName(command: string): void {
   if (!/^[a-zA-Z0-9._-]+$/.test(command)) {
@@ -30,11 +35,23 @@ export function assertCommandName(command: string): void {
   }
 }
 
-const ALLOWED_FORMATTERS = new Set(["prettier", "eslint", "biome", "rustfmt", "gofmt", "black", "clang-format", "autopep8", "yapf"]);
+const ALLOWED_FORMATTERS = new Set([
+  "prettier",
+  "eslint",
+  "biome",
+  "rustfmt",
+  "gofmt",
+  "black",
+  "clang-format",
+  "autopep8",
+  "yapf",
+]);
 
 export function assertFormatterName(command: string): void {
   assertCommandName(command);
   if (!ALLOWED_FORMATTERS.has(command)) {
-    throw new Error(`Command '${command}' is not a permitted formatter. Allowed formatters are: ${Array.from(ALLOWED_FORMATTERS).join(", ")}`);
+    throw new Error(
+      `Command '${command}' is not a permitted formatter. Allowed formatters are: ${Array.from(ALLOWED_FORMATTERS).join(", ")}`,
+    );
   }
 }

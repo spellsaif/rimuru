@@ -1,5 +1,5 @@
 import { opendir, readFile, stat } from "node:fs/promises";
-import { join, relative, sep } from "node:path";
+import { join, relative } from "node:path";
 
 export interface IndexedFile {
   readonly path: string;
@@ -16,7 +16,10 @@ export interface WorkspaceIndex {
  * Production-grade lexical indexer for workspace search.
  * Uses an iterative walker and frequency-aware scoring.
  */
-export async function buildLexicalIndex(workspace: string, options: { readonly maxFiles?: number; readonly maxFileSize?: number } = {}): Promise<WorkspaceIndex> {
+export async function buildLexicalIndex(
+  workspace: string,
+  options: { readonly maxFiles?: number; readonly maxFileSize?: number } = {},
+): Promise<WorkspaceIndex> {
   const files = [] as IndexedFile[];
   const maxFiles = options.maxFiles ?? 500;
   const maxFileSize = options.maxFileSize ?? 1024 * 512; // 512KB limit per file
@@ -25,14 +28,14 @@ export async function buildLexicalIndex(workspace: string, options: { readonly m
   const ignoreList = new Set([".git", "node_modules", "dist", "build", ".next", ".rimuru", "out", "target", "vendor"]);
 
   const stack: string[] = [workspace];
-  
+
   while (stack.length > 0 && files.length < maxFiles) {
     const currentDir = stack.pop()!;
     try {
       const dir = await opendir(currentDir);
       for await (const entry of dir) {
         if (ignoreList.has(entry.name)) continue;
-        
+
         const fullPath = join(currentDir, entry.name);
         const relPath = relative(workspace, fullPath);
 
@@ -40,7 +43,7 @@ export async function buildLexicalIndex(workspace: string, options: { readonly m
           stack.push(fullPath);
         } else if (entry.isFile()) {
           if (shouldSkip(relPath)) continue;
-          
+
           try {
             const stats = await stat(fullPath);
             if (stats.size > maxFileSize) continue;
@@ -51,7 +54,7 @@ export async function buildLexicalIndex(workspace: string, options: { readonly m
             files.push({
               path: relPath,
               terms: new Set(extractTerms(content)),
-              summary: createSummary(content)
+              summary: createSummary(content),
             });
           } catch {
             // Skip files that can't be read (e.g. permission denied)
@@ -88,7 +91,7 @@ export async function buildLexicalIndex(workspace: string, options: { readonly m
         .map((res) => res.file);
 
       return results.slice(0, searchOptions.limit ?? 10);
-    }
+    },
   };
 }
 
@@ -99,17 +102,21 @@ function shouldSkip(path: string): boolean {
 
 function extractTerms(text: string): string[] {
   // Lowercase, remove symbols, split by whitespace and snake/camel case boundaries
-  const sanitized = text.toLowerCase()
+  const sanitized = text
+    .toLowerCase()
     .replace(/[^a-z0-9_\-\s]/g, " ")
     .replace(/([a-z])([A-Z])/g, "$1 $2") // Split camelCase
     .replace(/[_-]/g, " "); // Split snake_case/kebab-case
-    
-  return sanitized.split(/\s+/)
-    .filter((term) => term.length >= 2);
+
+  return sanitized.split(/\s+/).filter((term) => term.length >= 2);
 }
 
 function createSummary(content: string): string {
   // Take first 3 lines or first 240 chars
-  const lines = content.split("\n").filter(l => l.trim().length > 0).slice(0, 3).join(" ");
+  const lines = content
+    .split("\n")
+    .filter((l) => l.trim().length > 0)
+    .slice(0, 3)
+    .join(" ");
   return lines.length > 240 ? lines.slice(0, 237) + "..." : lines;
 }

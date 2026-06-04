@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual, verify, createPublicKey } from "node:crypto";
+import { createHmac, createPublicKey, timingSafeEqual, verify } from "node:crypto";
 import type { CircleConfig, RuntimeConfig } from "../config/runtime-config.js";
 import type { FlowBus } from "../core/events.js";
 
@@ -24,14 +24,22 @@ export interface CircleMessage {
  */
 export interface CircleAdapter {
   readonly kind: string;
-  normalize(circle: CircleConfig, body: Record<string, unknown>): CircleMessage | { readonly challenge?: string; readonly pong?: boolean } | undefined;
+  normalize(
+    circle: CircleConfig,
+    body: Record<string, unknown>,
+  ): CircleMessage | { readonly challenge?: string; readonly pong?: boolean } | undefined;
   send?(circle: CircleConfig, chatId: string, text: string): Promise<void>;
   start?(circle: CircleConfig, context: { workspace: string; flowBus: FlowBus }): Promise<void>;
 }
 
-export function verifySlackSignature(signingSecret: string, timestamp: string, rawBody: string, signature: string): boolean {
+export function verifySlackSignature(
+  signingSecret: string,
+  timestamp: string,
+  rawBody: string,
+  signature: string,
+): boolean {
   const now = Math.floor(Date.now() / 1000);
-  const ts = parseInt(timestamp, 10);
+  const ts = Number.parseInt(timestamp, 10);
   if (isNaN(ts) || Math.abs(now - ts) > 300) {
     return false;
   }
@@ -46,7 +54,12 @@ export function verifySlackSignature(signingSecret: string, timestamp: string, r
   }
 }
 
-export function verifyDiscordSignature(publicKeyHex: string, timestamp: string, rawBody: string, signatureHex: string): boolean {
+export function verifyDiscordSignature(
+  publicKeyHex: string,
+  timestamp: string,
+  rawBody: string,
+  signatureHex: string,
+): boolean {
   try {
     const signature = Buffer.from(signatureHex, "hex");
     const data = Buffer.from(timestamp + rawBody, "utf8");
@@ -55,7 +68,7 @@ export function verifyDiscordSignature(publicKeyHex: string, timestamp: string, 
     const publicKey = createPublicKey({
       key: keyBuffer,
       format: "der",
-      type: "spki"
+      type: "spki",
     });
     return verify(undefined, data, publicKey, signature);
   } catch (error) {
@@ -83,16 +96,16 @@ export const TELEGRAM_ADAPTER: CircleAdapter = {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text })
+      body: JSON.stringify({ chat_id: chatId, text }),
     });
     if (!res.ok) {
       throw new Error(`Telegram sendMessage failed: HTTP ${res.status}`);
     }
-    const json = await res.json() as any;
+    const json = (await res.json()) as any;
     if (!json.ok) {
       throw new Error(`Telegram API error: ${json.description}`);
     }
-  }
+  },
 };
 
 export const SLACK_ADAPTER: CircleAdapter = {
@@ -113,18 +126,18 @@ export const SLACK_ADAPTER: CircleAdapter = {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
+        Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ channel: chatId, text })
+      body: JSON.stringify({ channel: chatId, text }),
     });
     if (!res.ok) {
       throw new Error(`Slack postMessage failed: HTTP ${res.status}`);
     }
-    const json = await res.json() as any;
+    const json = (await res.json()) as any;
     if (!json.ok) {
       throw new Error(`Slack API error: ${json.error}`);
     }
-  }
+  },
 };
 
 export const DISCORD_ADAPTER: CircleAdapter = {
@@ -135,7 +148,14 @@ export const DISCORD_ADAPTER: CircleAdapter = {
     const message = readRecord(body.message);
     const user = readRecord(body.user) ?? readRecord(readRecord(body.member)?.user);
     const author = readRecord(message?.author) ?? readRecord(body.author);
-    const content = typeof body.content === "string" ? body.content : typeof message?.content === "string" ? message.content : typeof data?.name === "string" ? `/${data.name}` : undefined;
+    const content =
+      typeof body.content === "string"
+        ? body.content
+        : typeof message?.content === "string"
+          ? message.content
+          : typeof data?.name === "string"
+            ? `/${data.name}`
+            : undefined;
     if (!content) return undefined;
     const from = String(user?.username ?? user?.id ?? author?.username ?? author?.id ?? body.channel_id ?? "discord");
     const channelId = String(body.channel_id ?? message?.channel_id ?? "default");
@@ -149,18 +169,18 @@ export const DISCORD_ADAPTER: CircleAdapter = {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bot ${token}`
+        Authorization: `Bot ${token}`,
       },
-      body: JSON.stringify({ content: text })
+      body: JSON.stringify({ content: text }),
     });
     if (!res.ok) {
       throw new Error(`Discord message post failed: HTTP ${res.status}`);
     }
-    const json = await res.json() as any;
+    const json = (await res.json()) as any;
     if (json.code) {
       throw new Error(`Discord API error: ${json.message} (code ${json.code})`);
     }
-  }
+  },
 };
 
 const ADAPTERS: Map<string, CircleAdapter> = new Map();
@@ -178,14 +198,13 @@ export function getCircleAdapter(kind: string): CircleAdapter | undefined {
   return ADAPTERS.get(kind);
 }
 
-
 export function listCircles(config: RuntimeConfig): readonly CircleSummary[] {
   return normalizedCircles(config).map((circle) => ({
     name: circle.name,
     kind: circle.kind,
     enabled: circle.enabled !== false,
     endpoint: endpointFor(circle),
-    paired: circle.allowFrom?.includes("*") ?? false
+    paired: circle.allowFrom?.includes("*") ?? false,
   }));
 }
 
@@ -197,9 +216,14 @@ export function normalizeLocalCircleMessage(body: Record<string, unknown>, sessi
   return {
     circle: "local",
     from: typeof body.from === "string" ? body.from : "local",
-    text: typeof body.message === "string" ? body.message : typeof body.prompt === "string" ? body.prompt : String(body.text ?? ""),
+    text:
+      typeof body.message === "string"
+        ? body.message
+        : typeof body.prompt === "string"
+          ? body.prompt
+          : String(body.text ?? ""),
     sessionId: typeof body.sessionId === "string" ? body.sessionId : sessionId,
-    raw: body
+    raw: body,
   };
 }
 
@@ -213,7 +237,8 @@ function endpointFor(circle: CircleConfig): string {
   return `/circles/${circle.name}/message`;
 }
 
-
 function readRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
 }

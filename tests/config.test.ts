@@ -24,11 +24,19 @@ describe("loadRuntimeConfig", () => {
     try {
       await writeFile(
         join(root, "rimuru.config.json"),
-        JSON.stringify({ provider: "mock", model: "file-model", sessionId: "file-session", allowedRisks: ["read", "execute"] }),
-        "utf8"
+        JSON.stringify({
+          provider: "mock",
+          model: "file-model",
+          sessionId: "file-session",
+          allowedRisks: ["read", "execute"],
+        }),
+        "utf8",
       );
 
-      const config = await loadRuntimeConfig({ workspace: root, env: { RIMURU_MODEL: "env-model", RIMURU_SESSION: "env-session" } });
+      const config = await loadRuntimeConfig({
+        workspace: root,
+        env: { RIMURU_MODEL: "env-model", RIMURU_SESSION: "env-session" },
+      });
 
       expect(config.model).toBe("env-model");
       expect(config.sessionId).toBe("env-session");
@@ -43,11 +51,20 @@ describe("loadRuntimeConfig", () => {
     try {
       await writeFile(
         join(root, "rimuru.config.json"),
-        JSON.stringify({ shard: "ollama", model: "llama3.1", soul: "main", vows: ["read", "write"], barrier: "readonly" }),
-        "utf8"
+        JSON.stringify({
+          shard: "ollama",
+          model: "llama3.1",
+          soul: "main",
+          vows: ["read", "write"],
+          barrier: "readonly",
+        }),
+        "utf8",
       );
 
-      const config = await loadRuntimeConfig({ workspace: root, env: { RIMURU_SOUL: "env-soul", RIMURU_VOWS: "read,execute" } });
+      const config = await loadRuntimeConfig({
+        workspace: root,
+        env: { RIMURU_SOUL: "env-soul", RIMURU_VOWS: "read,execute" },
+      });
 
       expect(config.provider).toBe("ollama");
       expect(config.model).toBe("llama3.1");

@@ -26,8 +26,10 @@ export class OpenRouterShard implements Shard {
       const response = await this.#fetch(url, init);
       if (response.status !== 429 || i === maxRetries) return response;
       const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
-      process.stdout.write(`\n\x1b[90m[provider] Rate limited by OpenRouter (429). Retrying in ${Math.round(delay / 1000)}s...\x1b[0m\n`);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      process.stdout.write(
+        `\n\x1b[90m[provider] Rate limited by OpenRouter (429). Retrying in ${Math.round(delay / 1000)}s...\x1b[0m\n`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
     throw new Error("Unreachable");
   }
@@ -39,13 +41,13 @@ export class OpenRouterShard implements Shard {
         "content-type": "application/json",
         authorization: `Bearer ${this.#apiKey}`,
         "HTTP-Referer": "https://github.com/google/rimuru",
-        "X-Title": "Rimuru AI Assistant"
+        "X-Title": "Rimuru AI Assistant",
       },
       body: JSON.stringify({
         model: this.#model,
         messages: messages.map((m) => toChatMessage(m, this.#model)),
-        stream: false
-      })
+        stream: false,
+      }),
     });
 
     if (!response.ok) {
@@ -55,7 +57,7 @@ export class OpenRouterShard implements Shard {
     const payload = (await response.json()) as ChatCompletionResponse;
     return {
       content: payload.choices[0]?.message.content ?? "",
-      ...(payload.usage ? { usage: toUsage(payload.usage) } : {})
+      ...(payload.usage ? { usage: toUsage(payload.usage) } : {}),
     };
   }
 
@@ -66,14 +68,14 @@ export class OpenRouterShard implements Shard {
         "content-type": "application/json",
         authorization: `Bearer ${this.#apiKey}`,
         "HTTP-Referer": "https://github.com/google/rimuru",
-        "X-Title": "Rimuru AI Assistant"
+        "X-Title": "Rimuru AI Assistant",
       },
       body: JSON.stringify({
         model: this.#model,
         messages: messages.map((m) => toChatMessage(m, this.#model)),
         stream: true,
-        stream_options: { include_usage: true }
-      })
+        stream_options: { include_usage: true },
+      }),
     });
 
     if (!response.ok) {
@@ -126,7 +128,10 @@ async function* parseSse(body: ReadableStream<Uint8Array>): AsyncIterable<string
   }
 }
 
-function toChatMessage(message: Message, model: string): { readonly role: string; readonly content: string; readonly name?: string } {
+function toChatMessage(
+  message: Message,
+  model: string,
+): { readonly role: string; readonly content: string; readonly name?: string } {
   let role = message.role === "tool" ? "user" : message.role;
   if (role === "system" && (model.includes("gemma") || model.includes("o1-") || model.includes("o3-"))) {
     role = "user";
@@ -134,13 +139,13 @@ function toChatMessage(message: Message, model: string): { readonly role: string
   return {
     role,
     content: message.content,
-    ...(message.name === undefined ? {} : { name: message.name })
+    ...(message.name === undefined ? {} : { name: message.name }),
   };
 }
 
 function toUsage(usage: { readonly prompt_tokens?: number; readonly completion_tokens?: number }): TokenUsage {
   return {
     input: usage.prompt_tokens ?? 0,
-    output: usage.completion_tokens ?? 0
+    output: usage.completion_tokens ?? 0,
   };
 }

@@ -54,10 +54,21 @@ export class JsonSemanticMemoryStore {
     const current = new Map((await this.all()).map((record) => [record.id, record]));
     for (const record of records) current.set(record.id, record);
     await mkdir(dirname(this.path), { recursive: true });
-    await writeFile(this.path, `${JSON.stringify([...current.values()].sort((a, b) => a.id.localeCompare(b.id)), null, 2)}\n`, "utf8");
+    await writeFile(
+      this.path,
+      `${JSON.stringify(
+        [...current.values()].sort((a, b) => a.id.localeCompare(b.id)),
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
   }
 
-  async search(embedding: readonly number[], options: { readonly sessionId?: string; readonly limit?: number } = {}): Promise<readonly SemanticMemorySearchResult[]> {
+  async search(
+    embedding: readonly number[],
+    options: { readonly sessionId?: string; readonly limit?: number } = {},
+  ): Promise<readonly SemanticMemorySearchResult[]> {
     const limit = options.limit ?? 8;
     return (await this.all())
       .filter((record) => !options.sessionId || record.sessionId === options.sessionId)
@@ -70,17 +81,39 @@ export class JsonSemanticMemoryStore {
   async compact(options: { readonly keepPerSession?: number } = {}): Promise<void> {
     const keepPerSession = options.keepPerSession ?? 50;
     const grouped = new Map<string, SemanticMemoryRecord[]>();
-    for (const record of await this.all()) grouped.set(record.sessionId, [...(grouped.get(record.sessionId) ?? []), record]);
-    const kept = [...grouped.values()].flatMap((records) => records.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, keepPerSession));
+    for (const record of await this.all())
+      grouped.set(record.sessionId, [...(grouped.get(record.sessionId) ?? []), record]);
+    const kept = [...grouped.values()].flatMap((records) =>
+      records.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, keepPerSession),
+    );
     await mkdir(dirname(this.path), { recursive: true });
-    await writeFile(this.path, `${JSON.stringify(kept.sort((a, b) => a.id.localeCompare(b.id)), null, 2)}\n`, "utf8");
+    await writeFile(
+      this.path,
+      `${JSON.stringify(
+        kept.sort((a, b) => a.id.localeCompare(b.id)),
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
   }
 }
 
 export class SemanticMemory {
-  constructor(private readonly options: { readonly store: JsonSemanticMemoryStore; readonly embeddings: EmbeddingProvider; readonly clock?: () => Date }) {}
+  constructor(
+    private readonly options: {
+      readonly store: JsonSemanticMemoryStore;
+      readonly embeddings: EmbeddingProvider;
+      readonly clock?: () => Date;
+    },
+  ) {}
 
-  async remember(input: { readonly sessionId: string; readonly scope: SemanticMemoryRecord["scope"]; readonly text: string; readonly metadata?: Readonly<Record<string, string>> }): Promise<SemanticMemoryRecord> {
+  async remember(input: {
+    readonly sessionId: string;
+    readonly scope: SemanticMemoryRecord["scope"];
+    readonly text: string;
+    readonly metadata?: Readonly<Record<string, string>>;
+  }): Promise<SemanticMemoryRecord> {
     const createdAt = (this.options.clock ?? (() => new Date()))().toISOString();
     const record: SemanticMemoryRecord = {
       id: `${input.sessionId}:${input.scope}:${hash(`${input.text}:${createdAt}`).toString(16)}`,
@@ -90,7 +123,7 @@ export class SemanticMemory {
       summary: summarize(input.text),
       metadata: input.metadata ?? {},
       embedding: await this.options.embeddings.embed(input.text),
-      createdAt
+      createdAt,
     };
     await this.options.store.upsert([record]);
     return record;
@@ -108,7 +141,10 @@ export class SemanticMemory {
     return records;
   }
 
-  async search(query: string, options: { readonly sessionId?: string; readonly limit?: number } = {}): Promise<readonly SemanticMemorySearchResult[]> {
+  async search(
+    query: string,
+    options: { readonly sessionId?: string; readonly limit?: number } = {},
+  ): Promise<readonly SemanticMemorySearchResult[]> {
     return this.options.store.search(await this.options.embeddings.embed(query), options);
   }
 
@@ -126,13 +162,16 @@ export class SemanticMemory {
       summary: summarize(text),
       metadata: { role: message.role, index: String(index) },
       embedding: await this.options.embeddings.embed(text),
-      createdAt: message.createdAt.toISOString()
+      createdAt: message.createdAt.toISOString(),
     };
   }
 }
 
 export function createSemanticMemory(root: string): SemanticMemory {
-  return new SemanticMemory({ store: new JsonSemanticMemoryStore(join(root, "semantic-memory.json")), embeddings: new HashEmbeddingProvider() });
+  return new SemanticMemory({
+    store: new JsonSemanticMemoryStore(join(root, "semantic-memory.json")),
+    embeddings: new HashEmbeddingProvider(),
+  });
 }
 
 export function semanticMemoryRunes(memory: SemanticMemory): readonly Rune[] {
@@ -141,20 +180,33 @@ export function semanticMemoryRunes(memory: SemanticMemory): readonly Rune[] {
       name: "memory.remember",
       description: "Stores text in semantic memory for the current session.",
       risk: "write",
-      inputSchema: { type: "object", required: ["text"], properties: { text: { type: "string" }, scope: { type: "string" } } },
+      inputSchema: {
+        type: "object",
+        required: ["text"],
+        properties: { text: { type: "string" }, scope: { type: "string" } },
+      },
       async invoke(input: { readonly text: string; readonly scope?: SemanticMemoryRecord["scope"] }, context) {
         return memory.remember({ sessionId: context.sessionId, scope: input.scope ?? "note", text: input.text });
-      }
+      },
     },
     {
       name: "memory.search",
       description: "Searches semantic memory using local embeddings.",
       risk: "read",
-      inputSchema: { type: "object", required: ["query"], properties: { query: { type: "string" }, limit: { type: "number" } } },
+      inputSchema: {
+        type: "object",
+        required: ["query"],
+        properties: { query: { type: "string" }, limit: { type: "number" } },
+      },
       async invoke(input: { readonly query: string; readonly limit?: number }, context) {
-        return { results: await memory.search(input.query, { sessionId: context.sessionId, ...(input.limit === undefined ? {} : { limit: input.limit }) }) };
-      }
-    }
+        return {
+          results: await memory.search(input.query, {
+            sessionId: context.sessionId,
+            ...(input.limit === undefined ? {} : { limit: input.limit }),
+          }),
+        };
+      },
+    },
   ];
 }
 

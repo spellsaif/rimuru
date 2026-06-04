@@ -1,4 +1,4 @@
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { resolveWorkspacePath } from "../security/workspace.js";
 
@@ -18,7 +18,10 @@ export interface RollbackSummary {
 export async function listRollbacks(workspace: string): Promise<readonly RollbackSummary[]> {
   const root = rollbackRoot(workspace);
   try {
-    const entries = (await readdir(root)).filter((entry) => entry.endsWith(".json")).sort().reverse();
+    const entries = (await readdir(root))
+      .filter((entry) => entry.endsWith(".json"))
+      .sort()
+      .reverse();
     const summaries: RollbackSummary[] = [];
     for (const entry of entries) {
       const record = await readRollback(workspace, entry);
@@ -35,7 +38,10 @@ export async function inspectRollback(workspace: string, id: string): Promise<Ro
   return readRollback(workspace, id);
 }
 
-export async function applyRollback(workspace: string, id: string): Promise<{ readonly path: string; readonly restored: boolean }> {
+export async function applyRollback(
+  workspace: string,
+  id: string,
+): Promise<{ readonly path: string; readonly restored: boolean }> {
   const record = await readRollback(workspace, id);
   const path = resolveWorkspacePath(workspace, record.path);
   await writeFile(path, record.before, "utf8");
@@ -45,7 +51,12 @@ export async function applyRollback(workspace: string, id: string): Promise<{ re
 async function readRollback(workspace: string, id: string): Promise<RollbackRecord> {
   const raw = await readFile(join(rollbackRoot(workspace), safeRollbackId(id)), "utf8");
   const parsed = JSON.parse(raw) as Partial<RollbackRecord>;
-  if (typeof parsed.path !== "string" || typeof parsed.before !== "string" || typeof parsed.after !== "string" || typeof parsed.createdAt !== "string") {
+  if (
+    typeof parsed.path !== "string" ||
+    typeof parsed.before !== "string" ||
+    typeof parsed.after !== "string" ||
+    typeof parsed.createdAt !== "string"
+  ) {
     throw new Error(`Invalid rollback record: ${id}`);
   }
   return { path: parsed.path, before: parsed.before, after: parsed.after, createdAt: parsed.createdAt };

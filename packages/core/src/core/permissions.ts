@@ -65,7 +65,7 @@ export class ConsensusPermissionPolicy implements PermissionPolicy {
   async decide(request: PermissionRequest): Promise<PermissionDecision> {
     let approvals = 0;
     const reasons: string[] = [];
-    
+
     for (const voter of this.#voters) {
       try {
         const decision = await voter.decide(request);
@@ -79,11 +79,17 @@ export class ConsensusPermissionPolicy implements PermissionPolicy {
         reasons.push(`error: ${e.message}`);
       }
     }
-    
+
     if (approvals >= this.#requiredApprovals) {
-      return { allowed: true, reason: `Consensus reached (${approvals}/${this.#voters.length}): ${reasons.join("; ")}` };
+      return {
+        allowed: true,
+        reason: `Consensus reached (${approvals}/${this.#voters.length}): ${reasons.join("; ")}`,
+      };
     }
-    return { allowed: false, reason: `Consensus failed (${approvals}/${this.#requiredApprovals} approvals): ${reasons.join("; ")}` };
+    return {
+      allowed: false,
+      reason: `Consensus failed (${approvals}/${this.#requiredApprovals} approvals): ${reasons.join("; ")}`,
+    };
   }
 }
 
@@ -114,7 +120,7 @@ export class ModelVoterPermissionPolicy implements PermissionPolicy {
       '  "allowed": true or false,',
       '  "reason": "Explain your safety analysis briefly"',
       "}",
-      "Do not include any formatting, markdown blocks, or other text outside the JSON."
+      "Do not include any formatting, markdown blocks, or other text outside the JSON.",
     ].join("\n");
 
     try {
@@ -122,19 +128,19 @@ export class ModelVoterPermissionPolicy implements PermissionPolicy {
         {
           role: "user",
           content: prompt,
-          createdAt: new Date()
-        }
+          createdAt: new Date(),
+        },
       ]);
       const cleanJson = response.content.replace(/```json|```/g, "").trim();
       const decision = JSON.parse(cleanJson);
       return {
         allowed: !!decision.allowed,
-        reason: `Model [${this.#name}]: ${decision.reason || "Voted"}`
+        reason: `Model [${this.#name}]: ${decision.reason || "Voted"}`,
       };
     } catch (e: any) {
       return {
         allowed: false,
-        reason: `Model [${this.#name}] vote failed: ${e.message}`
+        reason: `Model [${this.#name}] vote failed: ${e.message}`,
       };
     }
   }

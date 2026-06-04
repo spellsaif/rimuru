@@ -6,7 +6,7 @@ export function createRunes() {
       risk: "read",
       async invoke(input) {
         return { input, plugin: "tempest" };
-      }
+      },
     },
     {
       name: "tempest.note",
@@ -14,7 +14,7 @@ export function createRunes() {
       risk: "write",
       async invoke(input, context) {
         return { sessionId: context.sessionId, text: input.text ?? "tempest note" };
-      }
-    }
+      },
+    },
   ];
 }

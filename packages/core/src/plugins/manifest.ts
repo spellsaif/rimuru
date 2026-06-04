@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { RuneRegistry } from "../core/runes.js";
@@ -34,15 +34,27 @@ export async function loadPluginManifest(path: string): Promise<PluginManifest> 
 export function validatePluginManifest(value: unknown): PluginManifest {
   if (typeof value !== "object" || value === null) throw new Error("Plugin manifest must be an object");
   const manifest = value as Partial<PluginManifest>;
-  if (!manifest.name || !/^[a-z0-9][a-z0-9._-]*$/i.test(manifest.name)) throw new Error("Plugin manifest has invalid name");
+  if (!manifest.name || !/^[a-z0-9][a-z0-9._-]*$/i.test(manifest.name))
+    throw new Error("Plugin manifest has invalid name");
   if (!manifest.version) throw new Error("Plugin manifest requires version");
-  if (manifest.entry !== undefined && (typeof manifest.entry !== "string" || manifest.entry.startsWith("/") || manifest.entry.includes(".."))) {
+  if (
+    manifest.entry !== undefined &&
+    (typeof manifest.entry !== "string" || manifest.entry.startsWith("/") || manifest.entry.includes(".."))
+  ) {
     throw new Error("Plugin manifest has invalid entry");
   }
-  if (!Array.isArray(manifest.runes) || manifest.runes.length === 0) throw new Error("Plugin manifest requires runes array");
+  if (!Array.isArray(manifest.runes) || manifest.runes.length === 0)
+    throw new Error("Plugin manifest requires runes array");
   const seen = new Set<string>();
   for (const rune of manifest.runes) {
-    if (!rune.name || !/^[a-z0-9][a-z0-9._-]*$/i.test(rune.name) || !rune.name.startsWith(`${manifest.name}.`) || seen.has(rune.name) || !rune.description || !["read", "write", "execute", "network"].includes(rune.risk)) {
+    if (
+      !rune.name ||
+      !/^[a-z0-9][a-z0-9._-]*$/i.test(rune.name) ||
+      !rune.name.startsWith(`${manifest.name}.`) ||
+      seen.has(rune.name) ||
+      !rune.description ||
+      !["read", "write", "execute", "network"].includes(rune.risk)
+    ) {
       throw new Error(`Invalid plugin rune in ${manifest.name}`);
     }
     seen.add(rune.name);
@@ -57,7 +69,9 @@ export async function loadPluginManifests(paths: readonly string[]): Promise<rea
 export async function discoverPluginManifests(root: string): Promise<readonly PluginManifest[]> {
   try {
     const entries = await readdir(root, { withFileTypes: true });
-    const paths = entries.filter((entry) => entry.isDirectory()).map((entry) => join(root, entry.name, "rimuru.plugin.json"));
+    const paths = entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => join(root, entry.name, "rimuru.plugin.json"));
     return loadPluginManifests(paths);
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return [];
@@ -71,7 +85,8 @@ export async function loadPlugin(root: string): Promise<LoadedPlugin> {
   if (!manifest.entry) return { manifest, root, runes: manifestRunes(manifest) };
   const entry = resolve(dirname(manifestPath), manifest.entry);
   const module = (await import(pathToFileURL(entry).href)) as PluginModule;
-  if (typeof module.createRunes !== "function") throw new Error(`Plugin ${manifest.name} entry must export createRunes`);
+  if (typeof module.createRunes !== "function")
+    throw new Error(`Plugin ${manifest.name} entry must export createRunes`);
   const runes = await module.createRunes({ manifest, root });
   validatePluginRunes(manifest, runes);
   return { manifest, root, entry, runes };
@@ -80,7 +95,9 @@ export async function loadPlugin(root: string): Promise<LoadedPlugin> {
 export async function loadPlugins(root: string): Promise<readonly LoadedPlugin[]> {
   try {
     const entries = await readdir(root, { withFileTypes: true });
-    return Promise.all(entries.filter((entry) => entry.isDirectory()).map((entry) => loadPlugin(join(root, entry.name))));
+    return Promise.all(
+      entries.filter((entry) => entry.isDirectory()).map((entry) => loadPlugin(join(root, entry.name))),
+    );
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return [];
     throw error;
@@ -102,7 +119,7 @@ export function manifestRunes(manifest: PluginManifest): readonly Rune[] {
     risk: pluginRune.risk,
     async invoke() {
       throw new Error(`Plugin rune '${pluginRune.name}' is declared but no runtime loader is installed`);
-    }
+    },
   }));
 }
 
@@ -115,6 +132,7 @@ function validatePluginRunes(manifest: PluginManifest, runes: readonly Rune[]): 
     if (typeof rune.invoke !== "function") throw new Error(`Plugin ${manifest.name} rune ${rune.name} requires invoke`);
   }
   for (const declaredRune of declared.keys()) {
-    if (!runes.some((rune) => rune.name === declaredRune)) throw new Error(`Plugin ${manifest.name} did not export declared rune: ${declaredRune}`);
+    if (!runes.some((rune) => rune.name === declaredRune))
+      throw new Error(`Plugin ${manifest.name} did not export declared rune: ${declaredRune}`);
   }
 }

@@ -9,7 +9,7 @@ describe("renderDashboard", () => {
       provider: "mock",
       model: "mock",
       workspace: "/tmp/work",
-      events: []
+      events: [],
     });
 
     expect(output.toLowerCase()).toContain("rimuru");
@@ -33,10 +33,10 @@ describe("renderFullScreenTui", () => {
         sessions: ["default"],
         traces: ["trace.json"],
         mode: "idle",
-        status: "Ready"
+        status: "Ready",
       },
       100,
-      30
+      30,
     );
 
     expect(output.toLowerCase()).toContain("rimuru sovereign console");

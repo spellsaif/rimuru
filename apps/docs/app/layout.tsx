@@ -7,10 +7,11 @@ import "./global.css";
 export const metadata: Metadata = {
   title: {
     default: "Rimuru - Local-first AI assistant platform",
-    template: "%s | Rimuru"
+    template: "%s | Rimuru",
   },
-  description: "Rimuru is a safe, auditable local-first AI assistant platform with Gate, Runes, Circles, memory, traces, plugins, and a sky-blue slime soul.",
-  metadataBase: new URL("https://rimuru.local")
+  description:
+    "Rimuru is a safe, auditable local-first AI assistant platform with Gate, Runes, Circles, memory, traces, plugins, and a sky-blue slime soul.",
+  metadataBase: new URL("https://rimuru.local"),
 };
 
 export default function RootLayout({ children }: { readonly children: ReactNode }) {

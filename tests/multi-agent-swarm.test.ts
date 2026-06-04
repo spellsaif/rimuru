@@ -7,7 +7,7 @@ import {
   spawnVesselRune,
   delegateVesselRune,
   discoverSandboxedRunes,
-  loadRuntimeConfig
+  loadRuntimeConfig,
 } from "../src/index.js";
 
 describe("Local Multi-Agent Swarms & Dynamic Runes Loader", () => {
@@ -21,9 +21,9 @@ describe("Local Multi-Agent Swarms & Dynamic Runes Loader", () => {
           provider: "mock",
           model: "mock",
           sessionId: "parent-session",
-          allowedRisks: ["read", "write", "execute"]
+          allowedRisks: ["read", "write", "execute"],
         }),
-        "utf8"
+        "utf8",
       );
 
       // Create memory directory (which chronicle uses)
@@ -33,7 +33,7 @@ describe("Local Multi-Agent Swarms & Dynamic Runes Loader", () => {
       const context = {
         workspace: root,
         sessionId: "parent-session",
-        audit: false
+        audit: false,
       };
 
       // 2. Spawn child vessel with sub-vows (read, write)
@@ -41,9 +41,9 @@ describe("Local Multi-Agent Swarms & Dynamic Runes Loader", () => {
         {
           soul: "You are a read-only child agent.",
           vows: ["read"],
-          objective: "Inspect the registry"
+          objective: "Inspect the registry",
         },
-        context
+        context,
       );
 
       expect(spawnResult.sessionId).toContain("parent-session:child-");
@@ -62,12 +62,11 @@ describe("Local Multi-Agent Swarms & Dynamic Runes Loader", () => {
           {
             soul: "Malicious agent",
             vows: ["read", "network"],
-            objective: "Do bad stuff"
+            objective: "Do bad stuff",
           },
-          context
-        )
+          context,
+        ),
       ).rejects.toThrow("Permission escalation denied");
-
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -82,9 +81,9 @@ describe("Local Multi-Agent Swarms & Dynamic Runes Loader", () => {
           provider: "mock",
           model: "mock",
           sessionId: "parent-session",
-          allowedRisks: ["read", "execute"]
+          allowedRisks: ["read", "execute"],
         }),
-        "utf8"
+        "utf8",
       );
 
       const memoryDir = join(root, ".rimuru", "sessions");
@@ -93,7 +92,7 @@ describe("Local Multi-Agent Swarms & Dynamic Runes Loader", () => {
       const context = {
         workspace: root,
         sessionId: "parent-session",
-        audit: false
+        audit: false,
       };
 
       // First spawn a child
@@ -101,18 +100,18 @@ describe("Local Multi-Agent Swarms & Dynamic Runes Loader", () => {
         {
           soul: "Assistant",
           vows: ["read"],
-          objective: "Objective 1"
+          objective: "Objective 1",
         },
-        context
+        context,
       );
 
       // Now delegate follow up
       const delegateResult = await delegateVesselRune.invoke(
         {
           sessionId: spawnResult.sessionId,
-          objective: "Objective 2"
+          objective: "Objective 2",
         },
-        context
+        context,
       );
 
       expect(delegateResult.response).toContain("Rimuru heard: Objective: Objective 2");
@@ -122,12 +121,11 @@ describe("Local Multi-Agent Swarms & Dynamic Runes Loader", () => {
         delegateVesselRune.invoke(
           {
             sessionId: "non-existent-session-id",
-            objective: "Objective 3"
+            objective: "Objective 3",
           },
-          context
-        )
+          context,
+        ),
       ).rejects.toThrow("Child Vessel session not found");
-
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -153,16 +151,16 @@ describe("Local Multi-Agent Swarms & Dynamic Runes Loader", () => {
           required: ["val1", "val2"],
           properties: {
             val1: { type: "number" },
-            val2: { type: "number" }
-          }
+            val2: { type: "number" },
+          },
         },
         outputSchema: {
           type: "object",
           required: ["product"],
           properties: {
-            product: { type: "number" }
-          }
-        }
+            product: { type: "number" },
+          },
+        },
       };
 
       await writeFile(join(runesDir, "multiply.js"), jsCode, "utf8");
@@ -175,9 +173,9 @@ describe("Local Multi-Agent Swarms & Dynamic Runes Loader", () => {
           provider: "mock",
           model: "mock",
           sessionId: "main-session",
-          allowedRisks: ["read", "execute"]
+          allowedRisks: ["read", "execute"],
         }),
-        "utf8"
+        "utf8",
       );
 
       // 3. Initialize runtime (which automatically runs the discovery loader)
@@ -186,7 +184,7 @@ describe("Local Multi-Agent Swarms & Dynamic Runes Loader", () => {
 
       // 4. Verify the custom Rune was discovered and registered
       const registeredRunes = runtime.runes.list();
-      const multiplyRune = registeredRunes.find(r => r.name === "custom.multiply");
+      const multiplyRune = registeredRunes.find((r) => r.name === "custom.multiply");
       expect(multiplyRune).toBeDefined();
       expect(multiplyRune?.description).toBe("Multiplies two numbers in a QuickJS sandbox.");
       expect(multiplyRune?.risk).toBe("execute");
@@ -195,7 +193,7 @@ describe("Local Multi-Agent Swarms & Dynamic Runes Loader", () => {
       const result = await runtime.runes.invoke(
         "custom.multiply",
         { val1: 7, val2: 8 },
-        { workspace: root, sessionId: "main-session" }
+        { workspace: root, sessionId: "main-session" },
       );
 
       expect(result).toEqual({ product: 56 });
@@ -204,8 +202,7 @@ describe("Local Multi-Agent Swarms & Dynamic Runes Loader", () => {
       await writeFile(join(runesDir, "broken.js"), "broken code", "utf8");
       // JSON is missing for broken.js, it should warn and skip
       const discovered = await discoverSandboxedRunes(root);
-      expect(discovered.find(r => r.name.includes("broken"))).toBeUndefined();
-
+      expect(discovered.find((r) => r.name.includes("broken"))).toBeUndefined();
     } finally {
       await rm(root, { recursive: true, force: true });
     }

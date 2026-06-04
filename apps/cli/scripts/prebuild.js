@@ -18,7 +18,7 @@ async function prebuild() {
   }
 }
 
-prebuild().catch(err => {
+prebuild().catch((err) => {
   console.error("Prebuild failed:", err);
   process.exit(1);
 });

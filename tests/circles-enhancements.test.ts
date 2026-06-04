@@ -1,11 +1,11 @@
 import { describe, expect, it, vi, beforeAll, afterAll } from "vitest";
-import { 
-  verifySlackSignature, 
-  verifyDiscordSignature, 
-  TELEGRAM_ADAPTER, 
-  SLACK_ADAPTER, 
+import {
+  verifySlackSignature,
+  verifyDiscordSignature,
+  TELEGRAM_ADAPTER,
+  SLACK_ADAPTER,
   DISCORD_ADAPTER,
-  sendMessageRune
+  sendMessageRune,
 } from "../packages/core/src/index.js";
 
 describe("Circles & Webhooks Enhancements", () => {
@@ -16,8 +16,8 @@ describe("Circles & Webhooks Enhancements", () => {
         message: {
           chat: { id: 12345 },
           from: { id: 67890, username: "testuser" },
-          text: "hello bot"
-        }
+          text: "hello bot",
+        },
       };
       const msg = TELEGRAM_ADAPTER.normalize(circle, update) as any;
       expect(msg).toBeDefined();
@@ -27,14 +27,14 @@ describe("Circles & Webhooks Enhancements", () => {
 
     it("partitions Slack sessions dynamically per channel and thread", () => {
       const circle = { name: "my-slack", kind: "slack", enabled: true } as any;
-      
+
       // Without thread
       const body1 = {
         event: {
           channel: "C9999",
           user: "U1111",
-          text: "slack message"
-        }
+          text: "slack message",
+        },
       };
       const msg1 = SLACK_ADAPTER.normalize(circle, body1) as any;
       expect(msg1.sessionId).toBe("slack-my-slack-C9999");
@@ -46,8 +46,8 @@ describe("Circles & Webhooks Enhancements", () => {
           channel: "C9999",
           user: "U1111",
           text: "slack thread message",
-          thread_ts: "123456.789"
-        }
+          thread_ts: "123456.789",
+        },
       };
       const msg2 = SLACK_ADAPTER.normalize(circle, body2) as any;
       expect(msg2.sessionId).toBe("slack-my-slack-C9999-123456.789");
@@ -58,7 +58,7 @@ describe("Circles & Webhooks Enhancements", () => {
       const body = {
         channel_id: "D8888",
         author: { id: "A2222", username: "discorduser" },
-        content: "discord message"
+        content: "discord message",
       };
       const msg = DISCORD_ADAPTER.normalize(circle, body) as any;
       expect(msg.sessionId).toBe("discord-my-discord-D8888");
@@ -71,7 +71,7 @@ describe("Circles & Webhooks Enhancements", () => {
       const secret = "slacksecret";
       const timestamp = String(Math.floor(Date.now() / 1000));
       const rawBody = '{"event":{"text":"hello"}}';
-      
+
       // Calculate valid signature
       const crypto = require("node:crypto");
       const baseString = `v0:${timestamp}:${rawBody}`;
@@ -94,10 +94,10 @@ describe("Circles & Webhooks Enhancements", () => {
 
     it("verifies Discord Ed25519 signatures correctly", () => {
       const crypto = require("node:crypto");
-      
+
       // Generate a transient Ed25519 keypair for testing
       const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
-      
+
       // Export public key as raw public key (32 bytes)
       const spki = publicKey.export({ format: "der", type: "spki" });
       const rawPublicKeyHex = spki.subarray(spki.length - 32).toString("hex");
@@ -105,7 +105,7 @@ describe("Circles & Webhooks Enhancements", () => {
       const timestamp = "12345678";
       const rawBody = '{"content":"ping"}';
       const data = Buffer.from(timestamp + rawBody, "utf8");
-      
+
       const signature = crypto.sign(undefined, data, privateKey);
       const signatureHex = signature.toString("hex");
 
@@ -119,12 +119,15 @@ describe("Circles & Webhooks Enhancements", () => {
 
   describe("Outgoing Adapter Send Methods", () => {
     beforeAll(() => {
-      vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => {
-        return {
-          ok: true,
-          json: async () => ({ ok: true, message: "sent" })
-        };
-      }));
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation(async () => {
+          return {
+            ok: true,
+            json: async () => ({ ok: true, message: "sent" }),
+          };
+        }),
+      );
     });
 
     afterAll(() => {
@@ -134,34 +137,34 @@ describe("Circles & Webhooks Enhancements", () => {
     it("calls Slack chat.postMessage correctly", async () => {
       const circle = { name: "my-slack", kind: "slack", token: "xoxb-test" } as any;
       await SLACK_ADAPTER.send!(circle, "C123", "hello from tests");
-      
+
       expect(fetch).toHaveBeenCalledWith(
         "https://slack.com/api/chat.postMessage",
         expect.objectContaining({
           method: "POST",
           headers: expect.objectContaining({
-            "Authorization": "Bearer xoxb-test",
-            "Content-Type": "application/json"
+            Authorization: "Bearer xoxb-test",
+            "Content-Type": "application/json",
           }),
-          body: JSON.stringify({ channel: "C123", text: "hello from tests" })
-        })
+          body: JSON.stringify({ channel: "C123", text: "hello from tests" }),
+        }),
       );
     });
 
     it("calls Discord message post correctly", async () => {
       const circle = { name: "my-discord", kind: "discord", token: "bot-token" } as any;
       await DISCORD_ADAPTER.send!(circle, "D123", "hello from tests");
-      
+
       expect(fetch).toHaveBeenCalledWith(
         "https://discord.com/api/v10/channels/D123/messages",
         expect.objectContaining({
           method: "POST",
           headers: expect.objectContaining({
-            "Authorization": "Bot bot-token",
-            "Content-Type": "application/json"
+            Authorization: "Bot bot-token",
+            "Content-Type": "application/json",
           }),
-          body: JSON.stringify({ content: "hello from tests" })
-        })
+          body: JSON.stringify({ content: "hello from tests" }),
+        }),
       );
     });
   });

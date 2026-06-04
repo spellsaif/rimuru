@@ -10,7 +10,10 @@ describe("rollback", () => {
     try {
       await writeFile(join(root, "story.txt"), "hello claw", "utf8");
 
-      await editFileRune.invoke({ path: "story.txt", find: "claw", replace: "rimuru" }, { workspace: root, sessionId: "s" });
+      await editFileRune.invoke(
+        { path: "story.txt", find: "claw", replace: "rimuru" },
+        { workspace: root, sessionId: "s" },
+      );
 
       const rollbacks = await listRollbacks(root);
       expect(rollbacks).toHaveLength(1);

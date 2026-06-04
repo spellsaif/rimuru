@@ -10,14 +10,12 @@ describe("JsonChronicle", () => {
     try {
       const chronicle = new JsonChronicle(root);
       await chronicle.append("session/unsafe", [
-        { role: "user", content: "slime", createdAt: new Date("2026-01-01T00:00:00.000Z") }
+        { role: "user", content: "slime", createdAt: new Date("2026-01-01T00:00:00.000Z") },
       ]);
 
       const loaded = await chronicle.load("session/unsafe");
 
-      expect(loaded).toEqual([
-        { role: "user", content: "slime", createdAt: new Date("2026-01-01T00:00:00.000Z") }
-      ]);
+      expect(loaded).toEqual([{ role: "user", content: "slime", createdAt: new Date("2026-01-01T00:00:00.000Z") }]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

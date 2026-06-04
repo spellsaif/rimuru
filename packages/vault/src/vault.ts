@@ -27,7 +27,12 @@ export async function listVaultSecrets(workspace: string): Promise<readonly Vaul
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function setVaultSecret(workspace: string, name: string, value: string, env: NodeJS.ProcessEnv = process.env): Promise<VaultEntrySummary> {
+export async function setVaultSecret(
+  workspace: string,
+  name: string,
+  value: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<VaultEntrySummary> {
   assertSecretName(name);
   const vault = await readVault(workspace);
   const entry = encryptSecret(value, env);
@@ -35,7 +40,11 @@ export async function setVaultSecret(workspace: string, name: string, value: str
   return { name, updatedAt: entry.updatedAt };
 }
 
-export async function getVaultSecret(workspace: string, name: string, env: NodeJS.ProcessEnv = process.env): Promise<string> {
+export async function getVaultSecret(
+  workspace: string,
+  name: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string> {
   assertSecretName(name);
   const vault = await readVault(workspace);
   const entry = vault.secrets[name];
@@ -56,10 +65,12 @@ export async function deleteVaultSecret(workspace: string, name: string): Promis
 async function readVault(workspace: string): Promise<VaultFile> {
   try {
     const parsed = JSON.parse(await readFile(vaultPath(workspace), "utf8")) as Partial<VaultFile>;
-    if (parsed.version !== 1 || typeof parsed.secrets !== "object" || parsed.secrets === null) throw new Error("Invalid vault file");
+    if (parsed.version !== 1 || typeof parsed.secrets !== "object" || parsed.secrets === null)
+      throw new Error("Invalid vault file");
     return { version: 1, secrets: parsed.secrets as Readonly<Record<string, EncryptedSecret>> };
   } catch (error) {
-    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return { version: 1, secrets: {} };
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT")
+      return { version: 1, secrets: {} };
     throw error;
   }
 }
@@ -74,7 +85,12 @@ function encryptSecret(value: string, env: NodeJS.ProcessEnv): EncryptedSecret {
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", vaultKey(env), iv);
   const encrypted = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
-  return { iv: iv.toString("base64"), tag: cipher.getAuthTag().toString("base64"), value: encrypted.toString("base64"), updatedAt: new Date().toISOString() };
+  return {
+    iv: iv.toString("base64"),
+    tag: cipher.getAuthTag().toString("base64"),
+    value: encrypted.toString("base64"),
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 function decryptSecret(entry: EncryptedSecret, env: NodeJS.ProcessEnv): string {
@@ -87,13 +103,18 @@ function vaultKey(env: NodeJS.ProcessEnv): Buffer {
   let secret = env.RIMURU_VAULT_KEY;
   if (!secret) {
     try {
-      secret = execSync("secret-tool lookup app rimuru", { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+      secret = execSync("secret-tool lookup app rimuru", {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
     } catch {
       // Secure keychain query failed or not available, fall back
     }
   }
   if (!secret) {
-    throw new Error("RIMURU_VAULT_KEY environment variable is not configured and secure keychain lookup failed. Vault decryption/encryption denied.");
+    throw new Error(
+      "RIMURU_VAULT_KEY environment variable is not configured and secure keychain lookup failed. Vault decryption/encryption denied.",
+    );
   }
   // Use scrypt for strong key derivation with a fixed salt for local stability
   return scryptSync(secret, "rimuru-salt-v1", 32);

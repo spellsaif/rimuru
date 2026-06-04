@@ -10,7 +10,7 @@ export const gitStatusRune: Rune<Record<string, never>, { readonly status: strin
   risk: "read",
   async invoke(_input, context) {
     return { status: await git(context.workspace, ["status", "--short", "--branch"]) };
-  }
+  },
 };
 
 export const gitDiffRune: Rune<{ readonly staged?: boolean }, { readonly diff: string }> = {
@@ -20,7 +20,7 @@ export const gitDiffRune: Rune<{ readonly staged?: boolean }, { readonly diff: s
   inputSchema: { type: "object", properties: { staged: { type: "boolean" } } },
   async invoke(input, context) {
     return { diff: await git(context.workspace, input.staged ? ["diff", "--staged"] : ["diff"]) };
-  }
+  },
 };
 
 export const gitSummaryRune: Rune<Record<string, never>, { readonly summary: string }> = {
@@ -31,7 +31,7 @@ export const gitSummaryRune: Rune<Record<string, never>, { readonly summary: str
     const status = await git(context.workspace, ["status", "--short", "--branch"]);
     const lines = status.split("\n").filter(Boolean);
     return { summary: lines.length === 0 ? "Clean working tree" : lines.join("\n") };
-  }
+  },
 };
 
 export const gitLogRune: Rune<{ readonly limit?: number }, { readonly log: string }> = {
@@ -41,7 +41,7 @@ export const gitLogRune: Rune<{ readonly limit?: number }, { readonly log: strin
   inputSchema: { type: "object", properties: { limit: { type: "number" } } },
   async invoke(input, context) {
     return { log: await git(context.workspace, ["log", "-n", String(input.limit ?? 10), "--oneline"]) };
-  }
+  },
 };
 
 export const gitAddRune: Rune<{ readonly files: readonly string[] }, { readonly status: string }> = {
@@ -52,7 +52,7 @@ export const gitAddRune: Rune<{ readonly files: readonly string[] }, { readonly 
   async invoke(input, context) {
     await git(context.workspace, ["add", ...input.files]);
     return { status: "Files staged" };
-  }
+  },
 };
 
 export const gitCommitRune: Rune<{ readonly message: string }, { readonly result: string }> = {
@@ -62,7 +62,7 @@ export const gitCommitRune: Rune<{ readonly message: string }, { readonly result
   inputSchema: { type: "object", required: ["message"], properties: { message: { type: "string" } } },
   async invoke(input, context) {
     return { result: await git(context.workspace, ["commit", "-m", input.message]) };
-  }
+  },
 };
 
 export const gitPushRune: Rune<{ readonly remote?: string; readonly branch?: string }, { readonly result: string }> = {
@@ -72,7 +72,7 @@ export const gitPushRune: Rune<{ readonly remote?: string; readonly branch?: str
   inputSchema: { type: "object", properties: { remote: { type: "string" }, branch: { type: "string" } } },
   async invoke(input, context) {
     return { result: await git(context.workspace, ["push", input.remote ?? "origin", input.branch ?? "HEAD"]) };
-  }
+  },
 };
 
 export const gitPullRune: Rune<{ readonly remote?: string; readonly branch?: string }, { readonly result: string }> = {
@@ -82,7 +82,7 @@ export const gitPullRune: Rune<{ readonly remote?: string; readonly branch?: str
   inputSchema: { type: "object", properties: { remote: { type: "string" }, branch: { type: "string" } } },
   async invoke(input, context) {
     return { result: await git(context.workspace, ["pull", input.remote ?? "origin", input.branch ?? "HEAD"]) };
-  }
+  },
 };
 
 export const gitRunes = [
@@ -93,7 +93,7 @@ export const gitRunes = [
   gitAddRune,
   gitCommitRune,
   gitPushRune,
-  gitPullRune
+  gitPullRune,
 ] as const;
 
 async function git(workspace: string, args: readonly string[]): Promise<string> {
@@ -101,7 +101,12 @@ async function git(workspace: string, args: readonly string[]): Promise<string> 
     const { stdout } = await execFileAsync("git", [...args], { cwd: workspace, maxBuffer: 1024 * 1024 });
     return stdout;
   } catch (error) {
-    if (typeof error === "object" && error !== null && "stderr" in error && String(error.stderr).includes("not a git repository")) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "stderr" in error &&
+      String(error.stderr).includes("not a git repository")
+    ) {
       return "Not a git repository\n";
     }
     throw error;

@@ -6,10 +6,10 @@ export default defineConfig({
     environment: "node",
     include: ["tests/**/*.test.ts"],
     coverage: {
-      provider: "v8"
+      provider: "v8",
     },
     alias: {
-      "../src/index.js": resolve(__dirname, "./packages/core/src/index.ts")
-    }
-  }
+      "../src/index.js": resolve(__dirname, "./packages/core/src/index.ts"),
+    },
+  },
 });

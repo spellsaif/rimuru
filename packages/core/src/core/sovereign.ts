@@ -1,5 +1,14 @@
 import { FlowBus } from "./events.js";
-import type { AssistantResponse, Chronicle, Message, RunRequest, RunResult, Shard, ToolCall, RuneSchema } from "./types.js";
+import type {
+  AssistantResponse,
+  Chronicle,
+  Message,
+  RunRequest,
+  RunResult,
+  RuneSchema,
+  Shard,
+  ToolCall,
+} from "./types.js";
 
 export interface SovereignOptions {
   readonly shard: Shard;
@@ -33,11 +42,16 @@ export class Sovereign {
     const userMessage: Message = request.promptMessage ?? {
       role: "user",
       content: request.prompt ?? "",
-      createdAt: this.#clock()
+      createdAt: this.#clock(),
     };
 
     const messages = [this.systemMessage(), ...history, userMessage];
-    this.#flowBus.emit({ type: "provider.requested", provider: this.#shard.name, messages: messages.length, at: this.#clock() });
+    this.#flowBus.emit({
+      type: "provider.requested",
+      provider: this.#shard.name,
+      messages: messages.length,
+      at: this.#clock(),
+    });
 
     const response = await this.complete(messages, request.onText, request.tools);
     this.#flowBus.emit({ type: "provider.responded", provider: this.#shard.name, at: this.#clock() });
@@ -46,7 +60,7 @@ export class Sovereign {
       role: "assistant",
       content: response.content,
       ...(response.toolCalls ? { toolCalls: response.toolCalls } : {}),
-      createdAt: this.#clock()
+      createdAt: this.#clock(),
     };
 
     await this.#chronicle.append(request.sessionId, [userMessage, assistantMessage]);
@@ -56,7 +70,7 @@ export class Sovereign {
     return {
       response,
       transcript: [...history, userMessage, assistantMessage],
-      events: this.#flowBus.snapshot()
+      events: this.#flowBus.snapshot(),
     };
   }
 
@@ -64,11 +78,15 @@ export class Sovereign {
     return {
       role: "system",
       content: this.#systemPrompt,
-      createdAt: this.#clock()
+      createdAt: this.#clock(),
     };
   }
 
-  private async complete(messages: readonly Message[], onText?: (text: string) => void, tools?: readonly { readonly name: string; readonly description: string; readonly inputSchema?: RuneSchema }[]): Promise<AssistantResponse> {
+  private async complete(
+    messages: readonly Message[],
+    onText?: (text: string) => void,
+    tools?: readonly { readonly name: string; readonly description: string; readonly inputSchema?: RuneSchema }[],
+  ): Promise<AssistantResponse> {
     if (!this.#shard.stream) return this.#shard.complete(messages, { tools });
 
     let content = "";
@@ -78,7 +96,12 @@ export class Sovereign {
       if (chunk.type === "text") {
         content += chunk.text;
         onText?.(chunk.text);
-        this.#flowBus.emit({ type: "provider.streamed", provider: this.#shard.name, bytes: Buffer.byteLength(chunk.text), at: this.#clock() });
+        this.#flowBus.emit({
+          type: "provider.streamed",
+          provider: this.#shard.name,
+          bytes: Buffer.byteLength(chunk.text),
+          at: this.#clock(),
+        });
       }
       if (chunk.type === "tool_calls") {
         if (!toolCalls) toolCalls = [];
@@ -93,5 +116,5 @@ export class Sovereign {
 const defaultSystemPrompt = [
   "You are Rimuru, a local-first assistant runtime.",
   "Be direct, safe, observable, and useful.",
-  "Prefer explicit actions over hidden magic."
+  "Prefer explicit actions over hidden magic.",
 ].join(" ");

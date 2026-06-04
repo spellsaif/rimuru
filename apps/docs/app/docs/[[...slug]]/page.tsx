@@ -30,6 +30,6 @@ export async function generateMetadata(props: { readonly params: Promise<{ reado
 
   return {
     title: page.data.title,
-    description: page.data.description
+    description: page.data.description,
   };
 }

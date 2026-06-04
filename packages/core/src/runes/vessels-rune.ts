@@ -1,8 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { Rune, RuneRisk } from "../core/types.js";
-import { loadRuntimeConfig, type RuntimeConfig } from "../config/runtime-config.js";
-import { runAgentTurn, isRisk } from "../runtime/runtime.js";
+import { type RuntimeConfig, loadRuntimeConfig } from "../config/runtime-config.js";
+import type { Rune } from "../core/types.js";
+import { isRisk, runAgentTurn } from "../runtime/runtime.js";
 
 export const spawnVesselRune: Rune<
   { readonly soul: string; readonly vows: readonly string[]; readonly objective: string },
@@ -17,16 +17,16 @@ export const spawnVesselRune: Rune<
     properties: {
       soul: { type: "string" },
       vows: { type: "array" },
-      objective: { type: "string" }
-    }
+      objective: { type: "string" },
+    },
   },
   outputSchema: {
     type: "object",
     required: ["sessionId", "response"],
     properties: {
       sessionId: { type: "string" },
-      response: { type: "string" }
-    }
+      response: { type: "string" },
+    },
   },
   async invoke(input, context) {
     const parentConfig = await loadRuntimeConfig({ workspace: context.workspace });
@@ -55,7 +55,7 @@ export const spawnVesselRune: Rune<
       ...parentConfig,
       vesselId: childVesselId,
       allowedRisks: input.vows,
-      sessionId: childSessionId
+      sessionId: childSessionId,
     };
 
     const result = await runAgentTurn({
@@ -64,14 +64,14 @@ export const spawnVesselRune: Rune<
       objective: input.objective,
       sessionId: childSessionId,
       systemPrompt: input.soul,
-      flowBus: context.registry?.flowBus // If flowBus is passed
+      flowBus: context.registry?.flowBus, // If flowBus is passed
     });
 
     return {
       sessionId: childSessionId,
-      response: result.final.response.content
+      response: result.final.response.content,
     };
-  }
+  },
 };
 
 export const delegateVesselRune: Rune<
@@ -86,15 +86,15 @@ export const delegateVesselRune: Rune<
     required: ["sessionId", "objective"],
     properties: {
       sessionId: { type: "string" },
-      objective: { type: "string" }
-    }
+      objective: { type: "string" },
+    },
   },
   outputSchema: {
     type: "object",
     required: ["response"],
     properties: {
-      response: { type: "string" }
-    }
+      response: { type: "string" },
+    },
   },
   async invoke(input, context) {
     const parentConfig = await loadRuntimeConfig({ workspace: context.workspace });
@@ -122,7 +122,7 @@ export const delegateVesselRune: Rune<
       ...parentConfig,
       vesselId: childVesselId,
       allowedRisks: meta.vows,
-      sessionId: input.sessionId
+      sessionId: input.sessionId,
     };
 
     const result = await runAgentTurn({
@@ -131,13 +131,13 @@ export const delegateVesselRune: Rune<
       objective: input.objective,
       sessionId: input.sessionId,
       systemPrompt: meta.soul,
-      flowBus: context.registry?.flowBus
+      flowBus: context.registry?.flowBus,
     });
 
     return {
-      response: result.final.response.content
+      response: result.final.response.content,
     };
-  }
+  },
 };
 
 export const vesselsRunes = [spawnVesselRune, delegateVesselRune];

@@ -1,4 +1,4 @@
-import type { AssistantResponse, Message, Shard, StreamChunk, ShardOptions, ToolCall } from "../core/types.js";
+import type { AssistantResponse, Message, Shard, ShardOptions, StreamChunk, ToolCall } from "../core/types.js";
 
 export interface GeminiOptions {
   readonly apiKey: string;
@@ -22,23 +22,33 @@ export class GeminiShard implements Shard {
   }
 
   async complete(messages: readonly Message[], options?: ShardOptions): Promise<AssistantResponse> {
-    const payloadTools = options?.tools && options.tools.length > 0 ? [{
-      functionDeclarations: options.tools.map((t) => ({
-        name: t.name,
-        description: t.description,
-        parameters: mapSchemaToGemini(t.inputSchema)
-      }))
-    }] : undefined;
+    const payloadTools =
+      options?.tools && options.tools.length > 0
+        ? [
+            {
+              functionDeclarations: options.tools.map((t) => ({
+                name: t.name,
+                description: t.description,
+                parameters: mapSchemaToGemini(t.inputSchema),
+              })),
+            },
+          ]
+        : undefined;
 
-    const response = await this.#fetch(`${this.#baseUrl}/models/${encodeURIComponent(this.#model)}:generateContent?key=${encodeURIComponent(this.#apiKey)}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        contents: mapMessagesToGemini(messages),
-        systemInstruction: { parts: [{ text: messages.find((message) => message.role === "system")?.content ?? "" }] },
-        ...(payloadTools ? { tools: payloadTools } : {})
-      })
-    });
+    const response = await this.#fetch(
+      `${this.#baseUrl}/models/${encodeURIComponent(this.#model)}:generateContent?key=${encodeURIComponent(this.#apiKey)}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          contents: mapMessagesToGemini(messages),
+          systemInstruction: {
+            parts: [{ text: messages.find((message) => message.role === "system")?.content ?? "" }],
+          },
+          ...(payloadTools ? { tools: payloadTools } : {}),
+        }),
+      },
+    );
     if (!response.ok) throw new Error(`Gemini request failed: ${response.status} ${await response.text()}`);
     const payload = (await response.json()) as any;
     const parts = payload.candidates?.[0]?.content?.parts ?? [];
@@ -50,7 +60,7 @@ export class GeminiShard implements Shard {
         toolCalls.push({
           id: `${part.functionCall.name}-${Date.now()}`,
           name: part.functionCall.name,
-          arguments: part.functionCall.args ?? {}
+          arguments: part.functionCall.args ?? {},
         });
       }
     }
@@ -58,23 +68,33 @@ export class GeminiShard implements Shard {
   }
 
   async *stream(messages: readonly Message[], options?: ShardOptions): AsyncIterable<StreamChunk> {
-    const payloadTools = options?.tools && options.tools.length > 0 ? [{
-      functionDeclarations: options.tools.map((t) => ({
-        name: t.name,
-        description: t.description,
-        parameters: mapSchemaToGemini(t.inputSchema)
-      }))
-    }] : undefined;
+    const payloadTools =
+      options?.tools && options.tools.length > 0
+        ? [
+            {
+              functionDeclarations: options.tools.map((t) => ({
+                name: t.name,
+                description: t.description,
+                parameters: mapSchemaToGemini(t.inputSchema),
+              })),
+            },
+          ]
+        : undefined;
 
-    const response = await this.#fetch(`${this.#baseUrl}/models/${encodeURIComponent(this.#model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(this.#apiKey)}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        contents: mapMessagesToGemini(messages),
-        systemInstruction: { parts: [{ text: messages.find((message) => message.role === "system")?.content ?? "" }] },
-        ...(payloadTools ? { tools: payloadTools } : {})
-      })
-    });
+    const response = await this.#fetch(
+      `${this.#baseUrl}/models/${encodeURIComponent(this.#model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(this.#apiKey)}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          contents: mapMessagesToGemini(messages),
+          systemInstruction: {
+            parts: [{ text: messages.find((message) => message.role === "system")?.content ?? "" }],
+          },
+          ...(payloadTools ? { tools: payloadTools } : {}),
+        }),
+      },
+    );
     if (!response.ok) throw new Error(`Gemini stream failed: ${response.status} ${await response.text()}`);
     if (!response.body) throw new Error("Gemini stream failed: missing response body");
     for await (const event of parseSse(response.body)) {
@@ -88,13 +108,20 @@ export class GeminiShard implements Shard {
           toolCalls.push({
             id: `${part.functionCall.name}-${Date.now()}`,
             name: part.functionCall.name,
-            arguments: part.functionCall.args ?? {}
+            arguments: part.functionCall.args ?? {},
           });
         }
       }
       if (text) yield { type: "text", text };
       if (toolCalls.length > 0) yield { type: "tool_calls", toolCalls };
-      if (payload.usageMetadata) yield { type: "usage", usage: { input: payload.usageMetadata.promptTokenCount ?? 0, output: payload.usageMetadata.candidatesTokenCount ?? 0 } };
+      if (payload.usageMetadata)
+        yield {
+          type: "usage",
+          usage: {
+            input: payload.usageMetadata.promptTokenCount ?? 0,
+            output: payload.usageMetadata.candidatesTokenCount ?? 0,
+          },
+        };
     }
     yield { type: "done" };
   }
@@ -117,34 +144,36 @@ function mapSchemaToGemini(schema: any): any {
 }
 
 function mapMessagesToGemini(messages: readonly Message[]): any[] {
-  return messages.filter((message) => message.role !== "system").map((message) => {
-    let role = "user";
-    if (message.role === "assistant") role = "model";
-    if (message.role === "tool") role = "function";
+  return messages
+    .filter((message) => message.role !== "system")
+    .map((message) => {
+      let role = "user";
+      if (message.role === "assistant") role = "model";
+      if (message.role === "tool") role = "function";
 
-    const parts: any[] = [];
-    if (message.toolCalls && message.toolCalls.length > 0) {
-      for (const tc of message.toolCalls) {
-        parts.push({
-          functionCall: {
-            name: tc.name,
-            args: tc.arguments
-          }
-        });
-      }
-    } else if (message.role === "tool") {
-      parts.push({
-        functionResponse: {
-          name: message.name ?? "tool",
-          response: { output: message.content }
+      const parts: any[] = [];
+      if (message.toolCalls && message.toolCalls.length > 0) {
+        for (const tc of message.toolCalls) {
+          parts.push({
+            functionCall: {
+              name: tc.name,
+              args: tc.arguments,
+            },
+          });
         }
-      });
-    } else {
-      parts.push({ text: message.content });
-    }
+      } else if (message.role === "tool") {
+        parts.push({
+          functionResponse: {
+            name: message.name ?? "tool",
+            response: { output: message.content },
+          },
+        });
+      } else {
+        parts.push({ text: message.content });
+      }
 
-    return { role, parts };
-  });
+      return { role, parts };
+    });
 }
 
 async function* parseSse(body: ReadableStream<Uint8Array>): AsyncIterable<string> {
@@ -159,7 +188,11 @@ async function* parseSse(body: ReadableStream<Uint8Array>): AsyncIterable<string
     while (boundary !== -1) {
       const raw = buffer.slice(0, boundary);
       buffer = buffer.slice(boundary + 2);
-      const data = raw.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("\n");
+      const data = raw
+        .split("\n")
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trim())
+        .join("\n");
       if (data) yield data;
       boundary = buffer.indexOf("\n\n");
     }

@@ -25,7 +25,9 @@ export async function runInteractiveTui(options: InteractiveTuiOptions): Promise
   const rl = readline.createInterface({ input, output });
 
   console.log(`\n\x1b[35m\x1b[1m🌌 RIMURU SOVEREIGN TERMINAL\x1b[0m`);
-  console.log(`\x1b[90mSession:\x1b[0m ${options.sessionId} \x1b[90m|\x1b[0m \x1b[90mModel:\x1b[0m ${options.model} (${options.provider})`);
+  console.log(
+    `\x1b[90mSession:\x1b[0m ${options.sessionId} \x1b[90m|\x1b[0m \x1b[90mModel:\x1b[0m ${options.model} (${options.provider})`,
+  );
   console.log(`\x1b[90mWorkspace:\x1b[0m ${options.workspace}`);
   console.log(`\x1b[90m──────────────────────────────────────────────────\x1b[0m\n`);
 
@@ -41,16 +43,6 @@ export async function runInteractiveTui(options: InteractiveTuiOptions): Promise
 
       console.log(); // New line before response starts
 
-      const loop = new AgentLoop({
-        sovereign: options.sovereign,
-        runes: options.runes,
-        workspace: options.workspace,
-        sessionId: options.sessionId,
-        flowBus: options.flowBus,
-        audit: true,
-        chronicle: options.chronicle
-      });
-
       // Listen to FlowBus events for live execution feedback
       const unlisten = options.flowBus.listen((event: Flow) => {
         if (event.type === "rune.completed") {
@@ -64,6 +56,16 @@ export async function runInteractiveTui(options: InteractiveTuiOptions): Promise
 
       let isFirstText = true;
       try {
+        const loop = new AgentLoop({
+          sovereign: options.sovereign,
+          runes: options.runes,
+          workspace: options.workspace,
+          sessionId: options.sessionId,
+          flowBus: options.flowBus,
+          audit: true,
+          chronicle: options.chronicle,
+        });
+
         await loop.run(trimmed, (text) => {
           // Strip ANSI from text to inspect content
           const clean = text.replace(/\u001b\[[0-9;]*m/g, "").trim();
@@ -75,7 +77,7 @@ export async function runInteractiveTui(options: InteractiveTuiOptions): Promise
             console.log(`\x1b[36m⚡ Running ${clean.slice(7).trim()}...\x1b[0m`);
             return;
           }
-          
+
           if (isFirstText) {
             process.stdout.write(`\x1b[35m\x1b[1m✨ RIMURU:\x1b[0m `);
             isFirstText = false;

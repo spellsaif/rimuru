@@ -1,7 +1,7 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { Flow, Message } from "./types.js";
 import { redactSecrets } from "../security/redact.js";
+import type { Flow, Message } from "./types.js";
 
 export interface TraceRecord {
   readonly sessionId: string;
@@ -30,7 +30,12 @@ export class JsonTraceStore {
   }
 
   async inspect(name: string): Promise<unknown> {
-    return JSON.parse(await readFile(join(this.root, safeName(name).endsWith(".json") ? safeName(name) : `${safeName(name)}.json`), "utf8")) as unknown;
+    return JSON.parse(
+      await readFile(
+        join(this.root, safeName(name).endsWith(".json") ? safeName(name) : `${safeName(name)}.json`),
+        "utf8",
+      ),
+    ) as unknown;
   }
 }
 
@@ -45,8 +50,8 @@ function serializeTrace(record: TraceRecord): unknown {
     messages: record.messages.map((message) => ({
       ...message,
       content: redactSecrets(message.content),
-      createdAt: message.createdAt.toISOString()
+      createdAt: message.createdAt.toISOString(),
     })),
-    events: record.events.map((event) => ({ ...event, at: event.at.toISOString() }))
+    events: record.events.map((event) => ({ ...event, at: event.at.toISOString() })),
   };
 }

@@ -8,7 +8,9 @@ describe("semantic memory", () => {
   it("creates deterministic embeddings", async () => {
     const embeddings = new HashEmbeddingProvider(8);
 
-    await expect(embeddings.embed("rimuru sovereign runtime")).resolves.toEqual(await embeddings.embed("rimuru sovereign runtime"));
+    await expect(embeddings.embed("rimuru sovereign runtime")).resolves.toEqual(
+      await embeddings.embed("rimuru sovereign runtime"),
+    );
   });
 
   it("remembers and searches notes", async () => {
@@ -30,7 +32,9 @@ describe("semantic memory", () => {
     const root = await mkdtemp(join(tmpdir(), "rimuru-semantic-"));
     try {
       const chronicle = new MemoryChronicle();
-      await chronicle.append("s", [{ role: "user", content: "How does Chronicle memory work?", createdAt: new Date("2026-01-01T00:00:00.000Z") }]);
+      await chronicle.append("s", [
+        { role: "user", content: "How does Chronicle memory work?", createdAt: new Date("2026-01-01T00:00:00.000Z") },
+      ]);
       const memory = createSemanticMemory(root);
 
       await expect(memory.indexChronicle("s", chronicle)).resolves.toHaveLength(1);

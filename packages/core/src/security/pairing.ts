@@ -1,6 +1,6 @@
+import { randomInt } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { randomInt } from "node:crypto";
 
 export interface PairingEntry {
   readonly code: string;
@@ -34,7 +34,10 @@ export async function approvePairing(workspace: string, code: string): Promise<A
   const pending = store.pending.find((entry) => entry.code === code);
   if (!pending) throw new Error(`Unknown pairing code: ${code}`);
   const allowed = { circle: pending.circle, from: pending.from, approvedAt: new Date().toISOString() };
-  await writePairings(workspace, { pending: store.pending.filter((entry) => entry.code !== code), allowed: uniqueAllowed([...store.allowed, allowed]) });
+  await writePairings(workspace, {
+    pending: store.pending.filter((entry) => entry.code !== code),
+    allowed: uniqueAllowed([...store.allowed, allowed]),
+  });
   return allowed;
 }
 
@@ -42,13 +45,23 @@ export async function listPairings(workspace: string): Promise<PairingFile> {
   return readPairings(workspace);
 }
 
-export async function isSenderAllowed(workspace: string, circle: string, from: string, configuredAllow: readonly string[] = []): Promise<boolean> {
+export async function isSenderAllowed(
+  workspace: string,
+  circle: string,
+  from: string,
+  configuredAllow: readonly string[] = [],
+): Promise<boolean> {
   if (configuredAllow.includes("*") || configuredAllow.includes(from)) return true;
   const store = await readPairings(workspace);
   return store.allowed.some((entry) => entry.circle === circle && entry.from === from);
 }
 
-export async function requireSenderAllowed(workspace: string, circle: string, from: string, configuredAllow: readonly string[] = []): Promise<{ readonly allowed: true } | { readonly allowed: false; readonly pairing: PairingEntry }> {
+export async function requireSenderAllowed(
+  workspace: string,
+  circle: string,
+  from: string,
+  configuredAllow: readonly string[] = [],
+): Promise<{ readonly allowed: true } | { readonly allowed: false; readonly pairing: PairingEntry }> {
   if (await isSenderAllowed(workspace, circle, from, configuredAllow)) return { allowed: true };
   return { allowed: false, pairing: await requestPairing(workspace, circle, from) };
 }
@@ -58,7 +71,8 @@ async function readPairings(workspace: string): Promise<PairingFile> {
     const parsed = JSON.parse(await readFile(pairingPath(workspace), "utf8")) as Partial<PairingFile>;
     return { pending: parsed.pending ?? [], allowed: parsed.allowed ?? [] };
   } catch (error) {
-    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return { pending: [], allowed: [] };
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT")
+      return { pending: [], allowed: [] };
     throw error;
   }
 }

@@ -46,7 +46,10 @@ function htmlToMarkdown(html: string): string {
     .join("\n");
 }
 
-export const webSearchRune: Rune<{ readonly query: string }, { readonly results: readonly { title: string; snippet: string; url: string }[] }> = {
+export const webSearchRune: Rune<
+  { readonly query: string },
+  { readonly results: readonly { title: string; snippet: string; url: string }[] }
+> = {
   name: "web.search",
   description: "Searches the web via DuckDuckGo and returns organic titles, snippets, and URLs.",
   risk: "network",
@@ -54,15 +57,16 @@ export const webSearchRune: Rune<{ readonly query: string }, { readonly results:
     type: "object",
     required: ["query"],
     properties: {
-      query: { type: "string" }
-    }
+      query: { type: "string" },
+    },
   },
   async invoke(input) {
     const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(input.query)}`;
     const response = await fetch(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-      }
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
     });
 
     if (!response.ok) {
@@ -71,33 +75,37 @@ export const webSearchRune: Rune<{ readonly query: string }, { readonly results:
 
     const html = await response.text();
     const results: { title: string; snippet: string; url: string }[] = [];
-    const resultRegex = /<div class="result__body">([\s\S]*?)<\/div>/g;
+    const resultRegex = /<div[^>]+class="[^"]*result__body[^"]*"[^>]*>([\s\S]*?)<\/div>/g;
     let match: RegExpExecArray | null;
 
     while ((match = resultRegex.exec(html)) !== null) {
       const body = match[1]!;
-      const urlTitleMatch = body.match(/<a class="result__url" href="([^"]+)">([\s\S]*?)<\/a>/);
-      const snippetMatch = body.match(/<a class="result__snippet" href="[^"]+">([\s\S]*?)<\/a>/);
+      const urlAnchorMatch = body.match(/<a[^>]+class="[^"]*result__url[^"]*"[^>]*>([\s\S]*?)<\/a>/i);
+      const snippetAnchorMatch = body.match(/<a[^>]+class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/i);
 
-      if (urlTitleMatch) {
-        const rawUrl = urlTitleMatch[1]!;
-        let targetUrl = rawUrl;
-        const uddgMatch = rawUrl.match(/[?&]uddg=([^&]+)/);
-        if (uddgMatch) {
-          targetUrl = decodeURIComponent(uddgMatch[1]!);
-        }
+      if (urlAnchorMatch) {
+        const fullAnchor = urlAnchorMatch[0];
+        const hrefMatch = fullAnchor.match(/href="([^"]+)"/i);
+        if (hrefMatch) {
+          const rawUrl = hrefMatch[1]!;
+          let targetUrl = rawUrl;
+          const uddgMatch = rawUrl.match(/[?&]uddg=([^&]+)/);
+          if (uddgMatch) {
+            targetUrl = decodeURIComponent(uddgMatch[1]!);
+          }
 
-        const title = stripHtmlTags(urlTitleMatch[2]!).trim();
-        const snippet = snippetMatch ? stripHtmlTags(snippetMatch[1]!).trim() : "";
+          const title = stripHtmlTags(urlAnchorMatch[1]!).trim();
+          const snippet = snippetAnchorMatch ? stripHtmlTags(snippetAnchorMatch[1]!).trim() : "";
 
-        if (title && targetUrl) {
-          results.push({ title, snippet, url: targetUrl });
+          if (title && targetUrl) {
+            results.push({ title, snippet, url: targetUrl });
+          }
         }
       }
     }
 
     return { results };
-  }
+  },
 };
 
 export const webFetchUrlRune: Rune<{ readonly url: string }, { readonly title: string; readonly content: string }> = {
@@ -108,14 +116,15 @@ export const webFetchUrlRune: Rune<{ readonly url: string }, { readonly title: s
     type: "object",
     required: ["url"],
     properties: {
-      url: { type: "string" }
-    }
+      url: { type: "string" },
+    },
   },
   async invoke(input) {
     const response = await fetch(input.url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-      }
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
     });
 
     if (!response.ok) {
@@ -128,7 +137,7 @@ export const webFetchUrlRune: Rune<{ readonly url: string }, { readonly title: s
     const content = htmlToMarkdown(html);
 
     return { title, content };
-  }
+  },
 };
 
 export const webRunes = [webSearchRune, webFetchUrlRune] as const;

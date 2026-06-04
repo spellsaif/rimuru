@@ -1,44 +1,43 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHmac, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { RuntimeConfig } from "@rimuru/core";
-import { 
-  createCanvasArtifact, 
-  listCanvasArtifacts, 
+import {
+  createCanvasArtifact,
+  listCanvasArtifacts,
   readCanvasArtifact,
-  circleByName, 
-  listCircles, 
-  normalizeLocalCircleMessage, 
-  getCircleAdapter, 
+  circleByName,
+  listCircles,
+  normalizeLocalCircleMessage,
+  getCircleAdapter,
   registerCircleAdapter,
   verifySlackSignature,
   verifyDiscordSignature,
   WHATSAPP_ADAPTER,
   type CircleMessage,
-
   listAuditEvents,
   JsonChronicle,
   FlowBus,
-  type AssistantResponse, 
-  type Flow, 
-  type PermissionDecision, 
+  type AssistantResponse,
+  type Flow,
+  type PermissionDecision,
   type PermissionRequest,
   createSemanticMemory,
-  listPairings, 
-  approvePairing, 
+  listPairings,
+  approvePairing,
   requireSenderAllowed,
-  createRitual, 
-  deleteRitual, 
-  listRituals, 
-  runDueRituals, 
+  createRitual,
+  deleteRitual,
+  listRituals,
+  runDueRituals,
   setRitualEnabled,
   renderRoomHtml,
-  runAgentTurn, 
-  runChatTurn, 
-  createRuntime, 
+  runAgentTurn,
+  runChatTurn,
+  createRuntime,
   runtimePaths,
   listVessels,
-  type GateStatus
+  type GateStatus,
 } from "@rimuru/core";
 
 import { deleteVaultSecret, getVaultSecret, listVaultSecrets, setVaultSecret } from "@rimuru/vault";
@@ -79,13 +78,13 @@ interface RouteContext {
 export async function createGateHttpServer(options: GateServerOptions): Promise<Server> {
   const flowBus = new FlowBus();
   const approvalBroker = createApprovalBroker();
-  const approvalPrompt = options.approvals ? options.approvalPrompt ?? approvalBroker.prompt : options.approvalPrompt;
+  const approvalPrompt = options.approvals ? (options.approvalPrompt ?? approvalBroker.prompt) : options.approvalPrompt;
   const runtime = await createRuntime({
     config: options.config,
     workspace: options.workspace,
     flowBus,
     ...(options.approvals === undefined ? {} : { approvals: options.approvals }),
-    ...(approvalPrompt ? { approvalPrompt } : {})
+    ...(approvalPrompt ? { approvalPrompt } : {}),
   });
   const paths = runtimePaths(options.config, options.workspace);
   const chronicle = new JsonChronicle(paths.memoryDir);
@@ -111,28 +110,58 @@ export async function createGateHttpServer(options: GateServerOptions): Promise<
       const parts = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
 
       // Verify authorization if a gateway token is configured and the route is not public/webhooks
-      const isPublicRoute = 
-        request.method === "OPTIONS" || 
-        (request.method === "GET" && (url.pathname === "/" || url.pathname === "/health" || url.pathname === "/room")) ||
+      const isPublicRoute =
+        request.method === "OPTIONS" ||
+        (request.method === "GET" &&
+          (url.pathname === "/" || url.pathname === "/health" || url.pathname === "/room")) ||
         (request.method === "POST" && parts[0] === "circles" && parts[1]);
 
       if (gatewayToken && !isPublicRoute) {
         const authHeader = request.headers["authorization"];
         if (!authHeader || !authHeader.startsWith("Bearer ") || authHeader.slice(7).trim() !== gatewayToken.trim()) {
-          sendJson(response, request, 401, { error: "Unauthorized", message: "Missing or invalid gateway authorization token" }, options.corsOrigins);
+          sendJson(
+            response,
+            request,
+            401,
+            { error: "Unauthorized", message: "Missing or invalid gateway authorization token" },
+            options.corsOrigins,
+          );
           return;
         }
       }
 
-      const context: RouteContext = { request, response, url, parts, options, runtime, chronicle, semanticMemory, flowBus, status };
+      const context: RouteContext = {
+        request,
+        response,
+        url,
+        parts,
+        options,
+        runtime,
+        chronicle,
+        semanticMemory,
+        flowBus,
+        status,
+      };
 
       // Dispatch to specific handlers
       if (await dispatch(context)) return;
 
-      sendJson(response, request, 404, { error: `Unknown Gate route: ${request.method ?? "GET"} ${url.pathname}` }, options.corsOrigins);
+      sendJson(
+        response,
+        request,
+        404,
+        { error: `Unknown Gate route: ${request.method ?? "GET"} ${url.pathname}` },
+        options.corsOrigins,
+      );
     } catch (error) {
       console.error(`[gate] Request error: ${error instanceof Error ? error.stack : error}`);
-      sendJson(response, request, 500, { error: "Internal Server Error", message: error instanceof Error ? error.message : String(error) }, options.corsOrigins);
+      sendJson(
+        response,
+        request,
+        500,
+        { error: "Internal Server Error", message: error instanceof Error ? error.message : String(error) },
+        options.corsOrigins,
+      );
     }
   });
 
@@ -140,7 +169,6 @@ export async function createGateHttpServer(options: GateServerOptions): Promise<
   setupCircles(options, flowBus);
   return server;
 }
-
 
 /**
  * Simplified dispatcher that replaces the giant if/else block.
@@ -251,22 +279,28 @@ async function handleStatus({ response, request, status, options }: RouteContext
 
 async function handleOverview(ctx: RouteContext) {
   const { response, request, options, status, chronicle, runtime, semanticMemory } = ctx;
-  sendJson(response, request, 200, {
-    status,
-    policy: gatePolicy(options),
-    providers: gateProviders(options.config),
-    sessions: await chronicle.listSessions(),
-    runes: runtime.runes.describe(),
-    vessels: listVessels(options.config),
-    circles: listCircles(options.config),
-    pairings: await listPairings(options.workspace),
-    traces: await runtime.traceStore.list(),
-    approvals: (request as any).approvalBroker?.list() ?? [],
-    audit: await listAuditEvents(options.workspace, { limit: 20 }),
-    vault: { secrets: await listVaultSecrets(options.workspace) },
-    rituals: await listRituals(options.workspace),
-    canvas: await listCanvasArtifacts(options.workspace)
-  }, options.corsOrigins);
+  sendJson(
+    response,
+    request,
+    200,
+    {
+      status,
+      policy: gatePolicy(options),
+      providers: gateProviders(options.config),
+      sessions: await chronicle.listSessions(),
+      runes: runtime.runes.describe(),
+      vessels: listVessels(options.config),
+      circles: listCircles(options.config),
+      pairings: await listPairings(options.workspace),
+      traces: await runtime.traceStore.list(),
+      approvals: (request as any).approvalBroker?.list() ?? [],
+      audit: await listAuditEvents(options.workspace, { limit: 20 }),
+      vault: { secrets: await listVaultSecrets(options.workspace) },
+      rituals: await listRituals(options.workspace),
+      canvas: await listCanvasArtifacts(options.workspace),
+    },
+    options.corsOrigins,
+  );
   return true;
 }
 
@@ -289,10 +323,10 @@ async function handleRuneCall(ctx: RouteContext) {
   const { request, response, runtime, options } = ctx;
   const body = await readJson(request);
   const name = readString(body, "name");
-  const output = await runtime.runes.invoke(name, readOptional(body, "input") ?? {}, { 
-    workspace: options.workspace, 
-    sessionId: readOptionalString(body, "sessionId") ?? options.config.sessionId, 
-    audit: true 
+  const output = await runtime.runes.invoke(name, readOptional(body, "input") ?? {}, {
+    workspace: options.workspace,
+    sessionId: readOptionalString(body, "sessionId") ?? options.config.sessionId,
+    audit: true,
   });
   sendJson(response, request, 200, { output }, options.corsOrigins);
   return true;
@@ -309,14 +343,14 @@ async function handleRuneCallStream(ctx: RouteContext) {
     ...corsHeaders(request, options.corsOrigins),
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
-    Connection: "keep-alive"
+    Connection: "keep-alive",
   });
 
   try {
     const context = {
       workspace: options.workspace,
       sessionId,
-      audit: true
+      audit: true,
     };
     for await (const chunk of runtime.runes.invokeStream(name, input, context)) {
       response.write(`data: ${JSON.stringify({ type: "chunk", chunk })}\n\n`);
@@ -349,7 +383,7 @@ async function handleRuneRegister(ctx: RouteContext) {
     async invoke(input: any, context: any) {
       const { executeDynamicRune } = await import("@rimuru/core");
       return executeDynamicRune(code, input);
-    }
+    },
   };
 
   runtime.runes.register(dynamicRune);
@@ -367,7 +401,6 @@ async function handleRuneDeregister(ctx: RouteContext) {
   return true;
 }
 
-
 async function handleChat(ctx: RouteContext) {
   const { request, response, options, flowBus } = ctx;
   const body = await readJson(request);
@@ -377,7 +410,7 @@ async function handleChat(ctx: RouteContext) {
     prompt: readPrompt(body),
     sessionId: readOptionalString(body, "sessionId"),
     flowBus,
-    trace: options.trace
+    trace: options.trace,
   });
   sendJson(response, request, 200, { response: result.response, events: result.events }, options.corsOrigins);
   return true;
@@ -400,9 +433,15 @@ async function handleAgent(ctx: RouteContext) {
     sessionId: readOptionalString(body, "sessionId"),
     flowBus,
     approvals: options.approvals,
-    trace: options.trace
+    trace: options.trace,
   });
-  sendJson(response, request, 200, { plan: (result as any).plan, observations: (result as any).observations, answer: result.final.response.content }, options.corsOrigins);
+  sendJson(
+    response,
+    request,
+    200,
+    { plan: (result as any).plan, observations: (result as any).observations, answer: result.final.response.content },
+    options.corsOrigins,
+  );
   return true;
 }
 
@@ -422,13 +461,25 @@ async function handleListSessions({ response, request, chronicle, options }: Rou
 
 async function handleSessionHistory(ctx: RouteContext) {
   const { response, request, parts, chronicle, options } = ctx;
-  sendJson(response, request, 200, { sessionId: parts[1], messages: await chronicle.load(parts[1]) }, options.corsOrigins);
+  sendJson(
+    response,
+    request,
+    200,
+    { sessionId: parts[1], messages: await chronicle.load(parts[1]) },
+    options.corsOrigins,
+  );
   return true;
 }
 
 async function handleSessionSummary(ctx: RouteContext) {
   const { response, request, parts, chronicle, options } = ctx;
-  sendJson(response, request, 200, { sessionId: parts[1], summary: await chronicle.summarize(parts[1]) }, options.corsOrigins);
+  sendJson(
+    response,
+    request,
+    200,
+    { sessionId: parts[1], summary: await chronicle.summarize(parts[1]) },
+    options.corsOrigins,
+  );
   return true;
 }
 
@@ -443,8 +494,21 @@ async function handleSessionTraces(ctx: RouteContext) {
 async function handleSessionMessage(ctx: RouteContext) {
   const { request, response, parts, options, flowBus } = ctx;
   const body = await readJson(request);
-  const result = await runChatTurn({ config: options.config, workspace: options.workspace, prompt: readPrompt(body), sessionId: parts[1], flowBus, trace: options.trace });
-  sendJson(response, request, 200, { sessionId: parts[1], response: result.response, events: result.events }, options.corsOrigins);
+  const result = await runChatTurn({
+    config: options.config,
+    workspace: options.workspace,
+    prompt: readPrompt(body),
+    sessionId: parts[1],
+    flowBus,
+    trace: options.trace,
+  });
+  sendJson(
+    response,
+    request,
+    200,
+    { sessionId: parts[1], response: result.response, events: result.events },
+    options.corsOrigins,
+  );
   return true;
 }
 
@@ -467,16 +531,22 @@ async function handleTraceInspect({ response, request, parts, runtime, options }
 
 async function handleAudit({ response, request, url, options }: RouteContext) {
   const limit = parseLimit(url.searchParams.get("limit"), 100);
-  sendJson(response, request, 200, { events: await listAuditEvents(options.workspace, { limit }) }, options.corsOrigins);
+  sendJson(
+    response,
+    request,
+    200,
+    { events: await listAuditEvents(options.workspace, { limit }) },
+    options.corsOrigins,
+  );
   return true;
 }
 
 async function handleMemorySearch({ response, request, url, semanticMemory, options }: RouteContext) {
   const query = url.searchParams.get("query") ?? url.searchParams.get("q");
   if (!query) throw new Error("Missing memory search query");
-  const results = await semanticMemory.search(query, { 
-    sessionId: url.searchParams.get("sessionId") ?? undefined, 
-    limit: parseLimit(url.searchParams.get("limit"), 8) 
+  const results = await semanticMemory.search(query, {
+    sessionId: url.searchParams.get("sessionId") ?? undefined,
+    limit: parseLimit(url.searchParams.get("limit"), 8),
   });
   sendJson(response, request, 200, { results }, options.corsOrigins);
   return true;
@@ -485,10 +555,10 @@ async function handleMemorySearch({ response, request, url, semanticMemory, opti
 async function handleMemoryRemember(ctx: RouteContext) {
   const { request, response, semanticMemory, options } = ctx;
   const body = await readJson(request);
-  const result = await semanticMemory.remember({ 
-    sessionId: readOptionalString(body, "sessionId") ?? options.config.sessionId, 
-    scope: readMemoryScope(body), 
-    text: readString(body, "text") 
+  const result = await semanticMemory.remember({
+    sessionId: readOptionalString(body, "sessionId") ?? options.config.sessionId,
+    scope: readMemoryScope(body),
+    text: readString(body, "text"),
   });
   sendJson(response, request, 201, result, options.corsOrigins);
   return true;
@@ -525,7 +595,11 @@ async function handleApprovalDecision(ctx: RouteContext, allowed: boolean) {
   const body = await readJson(request);
   const broker = (request as any).approvalBroker;
   if (!broker) throw new Error("Approval broker not available");
-  const reason = allowed ? (readOptionalString(body, "scope") === "session" ? "approved for session" : "approved once") : (readOptionalString(body, "reason") ?? "denied by gate");
+  const reason = allowed
+    ? readOptionalString(body, "scope") === "session"
+      ? "approved for session"
+      : "approved once"
+    : (readOptionalString(body, "reason") ?? "denied by gate");
   const summary = broker.decide(parts[1], { allowed, reason });
   const key = allowed ? "approved" : "denied";
   sendJson(response, request, 200, { [key]: summary }, options.corsOrigins);
@@ -540,7 +614,13 @@ async function handlePairings({ response, request, options }: RouteContext) {
 async function handlePairingApprove(ctx: RouteContext) {
   const { request, response, options } = ctx;
   const body = await readJson(request);
-  sendJson(response, request, 200, await approvePairing(options.workspace, readString(body, "code")), options.corsOrigins);
+  sendJson(
+    response,
+    request,
+    200,
+    await approvePairing(options.workspace, readString(body, "code")),
+    options.corsOrigins,
+  );
   return true;
 }
 
@@ -552,12 +632,24 @@ async function handleListVault({ response, request, options }: RouteContext) {
 async function handleVaultSet(ctx: RouteContext) {
   const { request, response, options } = ctx;
   const body = await readJson(request);
-  sendJson(response, request, 200, await setVaultSecret(options.workspace, readString(body, "name"), readString(body, "value")), options.corsOrigins);
+  sendJson(
+    response,
+    request,
+    200,
+    await setVaultSecret(options.workspace, readString(body, "name"), readString(body, "value")),
+    options.corsOrigins,
+  );
   return true;
 }
 
 async function handleVaultGet({ response, request, parts, options }: RouteContext) {
-  sendJson(response, request, 200, { name: parts[1], value: await getVaultSecret(options.workspace, parts[1]) }, options.corsOrigins);
+  sendJson(
+    response,
+    request,
+    200,
+    { name: parts[1], value: await getVaultSecret(options.workspace, parts[1]) },
+    options.corsOrigins,
+  );
   return true;
 }
 
@@ -574,12 +666,18 @@ async function handleListRituals({ response, request, options }: RouteContext) {
 async function handleRitualCreate(ctx: RouteContext) {
   const { request, response, options } = ctx;
   const body = await readJson(request);
-  sendJson(response, request, 200, await createRitual(options.workspace, { 
-    id: readString(body, "id"), 
-    prompt: readPrompt(body), 
-    sessionId: readOptionalString(body, "sessionId") ?? options.config.sessionId, 
-    everyMinutes: readNumber(body, "everyMinutes") 
-  }), options.corsOrigins);
+  sendJson(
+    response,
+    request,
+    200,
+    await createRitual(options.workspace, {
+      id: readString(body, "id"),
+      prompt: readPrompt(body),
+      sessionId: readOptionalString(body, "sessionId") ?? options.config.sessionId,
+      everyMinutes: readNumber(body, "everyMinutes"),
+    }),
+    options.corsOrigins,
+  );
   return true;
 }
 
@@ -601,11 +699,17 @@ async function handleListCanvas({ response, request, options }: RouteContext) {
 async function handleCanvasCreate(ctx: RouteContext) {
   const { request, response, options } = ctx;
   const body = await readJson(request);
-  sendJson(response, request, 200, await createCanvasArtifact(options.workspace, { 
-    title: readString(body, "title"), 
-    kind: readArtifactKind(body), 
-    content: readString(body, "content") 
-  }), options.corsOrigins);
+  sendJson(
+    response,
+    request,
+    200,
+    await createCanvasArtifact(options.workspace, {
+      title: readString(body, "title"),
+      kind: readArtifactKind(body),
+      content: readString(body, "content"),
+    }),
+    options.corsOrigins,
+  );
   return true;
 }
 
@@ -626,19 +730,83 @@ async function handleListVessels({ response, request, options }: RouteContext) {
 
 async function handleCircleWebhook(ctx: RouteContext) {
   const { request, response, options, parts, flowBus } = ctx;
+
+  if (parts[1] !== "local") {
+    const circle = circleByName(options.config, parts[1]);
+    if (!circle) {
+      sendJson(
+        response,
+        request,
+        401,
+        { error: "Unauthorized", message: `Circle '${parts[1]}' is not configured or is disabled.` },
+        options.corsOrigins,
+      );
+      return true;
+    }
+    if (circle.kind !== "webhook") {
+      sendJson(
+        response,
+        request,
+        400,
+        { error: "Bad Request", message: `Circle '${parts[1]}' is not a custom webhook kind.` },
+        options.corsOrigins,
+      );
+      return true;
+    }
+
+    const expectedSecret = circle.secret ?? (circle.tokenEnv ? process.env[circle.tokenEnv] : circle.token);
+    if (!expectedSecret) {
+      sendJson(
+        response,
+        request,
+        401,
+        {
+          error: "Unauthorized",
+          message: `Webhook verification secret is not configured for circle '${circle.name}'.`,
+        },
+        options.corsOrigins,
+      );
+      return true;
+    }
+
+    const authHeader = String(request.headers["authorization"] ?? "");
+    const tokenHeader = String(request.headers["x-rimuru-token"] ?? request.headers["x-webhook-secret"] ?? "");
+    let providedToken = "";
+    if (authHeader.toLowerCase().startsWith("bearer ")) {
+      providedToken = authHeader.slice(7).trim();
+    } else {
+      providedToken = tokenHeader.trim();
+    }
+
+    if (!providedToken || !timingSafeCompare(providedToken, expectedSecret)) {
+      sendJson(
+        response,
+        request,
+        401,
+        { error: "Unauthorized", message: "Invalid webhook credentials or signature." },
+        options.corsOrigins,
+      );
+      return true;
+    }
+  }
+
   const body = await readJson(request);
   const circle = circleByName(options.config, parts[1]) ?? { name: parts[1], kind: "webhook" as const, enabled: true };
   const from = readOptionalString(body, "from") ?? "webhook";
   const text = readPrompt(body);
-  const sessionId = readOptionalString(body, "sessionId") ?? (circle as any).sessionId ?? `webhook-${circle.name}-${from}`;
+  const sessionId =
+    readOptionalString(body, "sessionId") ?? (circle as any).sessionId ?? `webhook-${circle.name}-${from}`;
 
-  const message = circle.name === "local" ? normalizeLocalCircleMessage(body, options.config.sessionId) : { 
-    circle: circle.name, 
-    from, 
-    text, 
-    sessionId, 
-    raw: body 
-  };
+  const message =
+    circle.name === "local"
+      ? normalizeLocalCircleMessage(body, options.config.sessionId)
+      : {
+          circle: circle.name,
+          from,
+          text,
+          sessionId,
+          raw: body,
+        };
 
   if (circle.name === "local") {
     const result = await handleCircleMessage(options, flowBus, message, ["*"]);
@@ -656,8 +824,14 @@ async function handleCircleWebhook(ctx: RouteContext) {
         await fetch(callbackUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ event: "circle.completed", circle: circle.name, from: message.from, sessionId, response: result.response })
-        }).catch(err => console.error(`[gate] Failed to post webhook callback to ${callbackUrl}:`, err));
+          body: JSON.stringify({
+            event: "circle.completed",
+            circle: circle.name,
+            from: message.from,
+            sessionId,
+            response: result.response,
+          }),
+        }).catch((err) => console.error(`[gate] Failed to post webhook callback to ${callbackUrl}:`, err));
       }
     } catch (err) {
       console.error(`[gate] Error during deferred custom webhook message processing for ${circle.name}:`, err);
@@ -665,6 +839,16 @@ async function handleCircleWebhook(ctx: RouteContext) {
   });
 
   return true;
+}
+
+function timingSafeCompare(a: string, b: string): boolean {
+  const aHash = createHmac("sha256", "rimuru-safe-compare-salt").update(a).digest();
+  const bHash = createHmac("sha256", "rimuru-safe-compare-salt").update(b).digest();
+  try {
+    return timingSafeEqual(aHash, bHash);
+  } catch {
+    return false;
+  }
 }
 
 async function handleCircleAdapter(ctx: RouteContext) {
@@ -678,29 +862,53 @@ async function handleCircleAdapter(ctx: RouteContext) {
 
   // Webhook Cryptographic Verification
   if (circle.kind === "slack") {
-    const signingSecret = (circle as any).signingSecret ?? ((circle as any).secret ?? process.env.SLACK_SIGNING_SECRET);
+    const signingSecret = (circle as any).signingSecret ?? (circle as any).secret ?? process.env.SLACK_SIGNING_SECRET;
     if (!signingSecret) {
-      sendJson(response, request, 401, { error: "Unauthorized", message: "Slack signing secret is not configured" }, options.corsOrigins);
+      sendJson(
+        response,
+        request,
+        401,
+        { error: "Unauthorized", message: "Slack signing secret is not configured" },
+        options.corsOrigins,
+      );
       return true;
     }
     const timestamp = String(request.headers["x-slack-request-timestamp"] ?? "");
     const signature = String(request.headers["x-slack-signature"] ?? "");
     const rawBody = (request as any).rawBody ?? "";
     if (!verifySlackSignature(signingSecret, timestamp, rawBody, signature)) {
-      sendJson(response, request, 401, { error: "Unauthorized", message: "Invalid Slack signature" }, options.corsOrigins);
+      sendJson(
+        response,
+        request,
+        401,
+        { error: "Unauthorized", message: "Invalid Slack signature" },
+        options.corsOrigins,
+      );
       return true;
     }
   } else if (circle.kind === "discord") {
-    const publicKey = (circle as any).publicKey ?? ((circle as any).secret ?? process.env.DISCORD_PUBLIC_KEY);
+    const publicKey = (circle as any).publicKey ?? (circle as any).secret ?? process.env.DISCORD_PUBLIC_KEY;
     if (!publicKey) {
-      sendJson(response, request, 401, { error: "Unauthorized", message: "Discord public key is not configured" }, options.corsOrigins);
+      sendJson(
+        response,
+        request,
+        401,
+        { error: "Unauthorized", message: "Discord public key is not configured" },
+        options.corsOrigins,
+      );
       return true;
     }
     const timestamp = String(request.headers["x-signature-timestamp"] ?? "");
     const signature = String(request.headers["x-signature-ed25519"] ?? "");
     const rawBody = (request as any).rawBody ?? "";
     if (!verifyDiscordSignature(publicKey, timestamp, rawBody, signature)) {
-      sendJson(response, request, 401, { error: "Unauthorized", message: "Invalid Discord signature" }, options.corsOrigins);
+      sendJson(
+        response,
+        request,
+        401,
+        { error: "Unauthorized", message: "Invalid Discord signature" },
+        options.corsOrigins,
+      );
       return true;
     }
   }
@@ -722,7 +930,13 @@ async function handleCircleAdapter(ctx: RouteContext) {
   const circleMessage = message as CircleMessage;
 
   // Acknowledge immediately and process asynchronously
-  sendJson(response, request, 202, { deferred: true, circle: circle.name, sessionId: circleMessage.sessionId }, options.corsOrigins);
+  sendJson(
+    response,
+    request,
+    202,
+    { deferred: true, circle: circle.name, sessionId: circleMessage.sessionId },
+    options.corsOrigins,
+  );
 
   Promise.resolve().then(async () => {
     try {
@@ -774,7 +988,14 @@ export async function listenGateServer(options: GateServerOptions): Promise<Gate
   const address = server.address() as AddressInfo;
   const normalizedHost = address.address === "::" ? "127.0.0.1" : address.address;
   const url = `http://${normalizedHost}:${address.port}`;
-  await writeGateState(options.workspace, { pid: process.pid, url, host: normalizedHost, port: address.port, workspace: options.workspace, startedAt: new Date().toISOString() });
+  await writeGateState(options.workspace, {
+    pid: process.pid,
+    url,
+    host: normalizedHost,
+    port: address.port,
+    workspace: options.workspace,
+    startedAt: new Date().toISOString(),
+  });
   server.once("close", () => {
     void clearGateState(options.workspace).catch(() => undefined);
   });
@@ -785,7 +1006,7 @@ export async function listenGateServer(options: GateServerOptions): Promise<Gate
     close: () =>
       new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
-      })
+      }),
   };
 }
 
@@ -805,13 +1026,23 @@ function createApprovalBroker(): {
         }, 300_000);
         timeout.unref();
         pending.set(id, {
-          summary: { id, rune: request.rune, risk: request.risk, sessionId: request.sessionId, workspace: request.workspace, input: request.input, createdAt: new Date().toISOString() },
+          summary: {
+            id,
+            rune: request.rune,
+            risk: request.risk,
+            sessionId: request.sessionId,
+            workspace: request.workspace,
+            input: request.input,
+            createdAt: new Date().toISOString(),
+          },
           resolve,
-          timeout
+          timeout,
         });
       });
     },
-    list() { return [...pending.values()].map((item) => item.summary); },
+    list() {
+      return [...pending.values()].map((item) => item.summary);
+    },
     decide(id, decision) {
       const item = pending.get(id);
       if (!item) throw new Error(`Unknown approval: ${id}`);
@@ -819,20 +1050,35 @@ function createApprovalBroker(): {
       pending.delete(id);
       item.resolve(decision);
       return item.summary;
-    }
+    },
   };
 }
 
 function gatePolicy(options: GateServerOptions): unknown {
-  return { vows: options.config.allowedRisks, barrier: options.config.sandboxMode, approvals: options.approvals ?? false };
+  return {
+    vows: options.config.allowedRisks,
+    barrier: options.config.sandboxMode,
+    approvals: options.approvals ?? false,
+  };
 }
 
 function gateProviders(config: RuntimeConfig): unknown {
-  return { current: { shard: config.provider, provider: config.provider, model: config.model, baseUrl: config.baseUrl ?? null }, fallbackShards: config.fallbackShards };
+  return {
+    current: {
+      shard: config.provider,
+      provider: config.provider,
+      model: config.model,
+      baseUrl: config.baseUrl ?? null,
+    },
+    fallbackShards: config.fallbackShards,
+  };
 }
 
 function createSessionId(): string {
-  return `soul-${new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14)}-${randomUUID().slice(0, 8)}`;
+  return `soul-${new Date()
+    .toISOString()
+    .replace(/[^0-9]/g, "")
+    .slice(0, 14)}-${randomUUID().slice(0, 8)}`;
 }
 
 function parseLimit(value: string | null, fallback: number): number {
@@ -852,12 +1098,17 @@ function safeName(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
-function streamEvents(request: IncomingMessage, response: ServerResponse, flowBus: FlowBus, corsOrigins?: readonly string[]): void {
+function streamEvents(
+  request: IncomingMessage,
+  response: ServerResponse,
+  flowBus: FlowBus,
+  corsOrigins?: readonly string[],
+): void {
   response.writeHead(200, {
     ...corsHeaders(request, corsOrigins),
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
-    Connection: "keep-alive"
+    Connection: "keep-alive",
   });
   const serialize = (event: Flow) => ({ ...event, at: event.at.toISOString() });
   for (const event of flowBus.snapshot()) response.write(`data: ${JSON.stringify(serialize(event))}\n\n`);
@@ -865,12 +1116,19 @@ function streamEvents(request: IncomingMessage, response: ServerResponse, flowBu
   request.on("close", stop);
 }
 
-function streamChat(request: IncomingMessage, response: ServerResponse, options: GateServerOptions, flowBus: FlowBus, prompt: string, sessionId?: string): void {
+function streamChat(
+  request: IncomingMessage,
+  response: ServerResponse,
+  options: GateServerOptions,
+  flowBus: FlowBus,
+  prompt: string,
+  sessionId?: string,
+): void {
   response.writeHead(200, {
     ...corsHeaders(request, options.corsOrigins),
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
-    Connection: "keep-alive"
+    Connection: "keep-alive",
   });
   void runChatTurn({
     config: options.config,
@@ -879,23 +1137,44 @@ function streamChat(request: IncomingMessage, response: ServerResponse, options:
     sessionId: sessionId ?? options.config.sessionId,
     flowBus,
     trace: options.trace,
-    onText: (text) => response.write(`data: ${JSON.stringify({ type: "text", text })}\n\n`)
+    onText: (text) => response.write(`data: ${JSON.stringify({ type: "text", text })}\n\n`),
   })
     .then((result) => {
       response.write(`data: ${JSON.stringify({ type: "done", response: result.response })}\n\n`);
       response.end();
     })
     .catch((error) => {
-      response.write(`data: ${JSON.stringify({ type: "error", error: error instanceof Error ? error.message : String(error) })}\n\n`);
+      response.write(
+        `data: ${JSON.stringify({ type: "error", error: error instanceof Error ? error.message : String(error) })}\n\n`,
+      );
       response.end();
     });
 }
 
-async function handleCircleMessage(options: GateServerOptions, flowBus: FlowBus, message: CircleMessage, allowFrom: readonly string[]): Promise<any> {
+async function handleCircleMessage(
+  options: GateServerOptions,
+  flowBus: FlowBus,
+  message: CircleMessage,
+  allowFrom: readonly string[],
+): Promise<any> {
   const gate = await requireSenderAllowed(options.workspace, message.circle, message.from, allowFrom);
-  if (!gate.allowed) return { circle: message.circle, from: message.from, paired: false, pairingCode: (gate as any).pairing.code, message: `Approve with: rimuru pairing approve ${(gate as any).pairing.code}` };
+  if (!gate.allowed)
+    return {
+      circle: message.circle,
+      from: message.from,
+      paired: false,
+      pairingCode: (gate as any).pairing.code,
+      message: `Approve with: rimuru pairing approve ${(gate as any).pairing.code}`,
+    };
   const sessionId = message.sessionId ?? options.config.sessionId;
-  const result = await runChatTurn({ config: options.config, workspace: options.workspace, prompt: `Circle ${message.circle} message from ${message.from}: ${message.text}`, sessionId, flowBus, trace: options.trace });
+  const result = await runChatTurn({
+    config: options.config,
+    workspace: options.workspace,
+    prompt: `Circle ${message.circle} message from ${message.from}: ${message.text}`,
+    sessionId,
+    flowBus,
+    trace: options.trace,
+  });
   return { circle: message.circle, from: message.from, sessionId, paired: true, response: result.response };
 }
 
@@ -948,30 +1227,56 @@ function readOptional(body: Record<string, unknown>, key: string): unknown {
   return body[key];
 }
 
-function sendEmpty(response: ServerResponse, request: IncomingMessage, status: number, corsOrigins?: readonly string[]): void {
+function sendEmpty(
+  response: ServerResponse,
+  request: IncomingMessage,
+  status: number,
+  corsOrigins?: readonly string[],
+): void {
   response.writeHead(status, corsHeaders(request, corsOrigins));
   response.end();
 }
 
-function sendHtml(response: ServerResponse, request: IncomingMessage, status: number, body: string, corsOrigins?: readonly string[]): void {
+function sendHtml(
+  response: ServerResponse,
+  request: IncomingMessage,
+  status: number,
+  body: string,
+  corsOrigins?: readonly string[],
+): void {
   response.writeHead(status, { ...corsHeaders(request, corsOrigins), "Content-Type": "text/html; charset=utf-8" });
   response.end(body);
 }
 
-function sendJson(response: ServerResponse, request: IncomingMessage, status: number, body: unknown, corsOrigins?: readonly string[]): void {
-  response.writeHead(status, { ...corsHeaders(request, corsOrigins), "Content-Type": "application/json; charset=utf-8" });
+function sendJson(
+  response: ServerResponse,
+  request: IncomingMessage,
+  status: number,
+  body: unknown,
+  corsOrigins?: readonly string[],
+): void {
+  response.writeHead(status, {
+    ...corsHeaders(request, corsOrigins),
+    "Content-Type": "application/json; charset=utf-8",
+  });
   response.end(`${JSON.stringify(body, null, 2)}\n`);
 }
 
 function corsHeaders(request?: IncomingMessage, allowedOrigins?: readonly string[]): Record<string, string> {
   const origin = request?.headers.origin;
-  const isAllowed = !origin || 
-    origin.startsWith("http://localhost:") || 
-    origin.startsWith("http://127.0.0.1:") || 
-    origin === "http://localhost" || 
-    origin === "http://127.0.0.1" || 
+  const isAllowed =
+    !origin ||
+    origin.startsWith("http://localhost:") ||
+    origin.startsWith("http://127.0.0.1:") ||
+    origin === "http://localhost" ||
+    origin === "http://127.0.0.1" ||
     (allowedOrigins?.includes(origin) ?? false);
-  return { "Access-Control-Allow-Origin": isAllowed && origin ? origin : "null", "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS", "Access-Control-Allow-Headers": "Content-Type", "Vary": "Origin" };
+  return {
+    "Access-Control-Allow-Origin": isAllowed && origin ? origin : "null",
+    "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    Vary: "Origin",
+  };
 }
 
 function readTelegramChatId(body: Record<string, unknown>): string | undefined {
@@ -986,8 +1291,17 @@ function setupRituals(options: GateServerOptions, flowBus: FlowBus) {
     if (ritualRunning) return;
     ritualRunning = true;
     void runDueRituals(options.workspace, new Date(), async (ritual) => {
-      await runChatTurn({ config: options.config, workspace: options.workspace, prompt: ritual.prompt, sessionId: ritual.sessionId, flowBus, trace: options.trace });
-    }).finally(() => { ritualRunning = false; });
+      await runChatTurn({
+        config: options.config,
+        workspace: options.workspace,
+        prompt: ritual.prompt,
+        sessionId: ritual.sessionId,
+        flowBus,
+        trace: options.trace,
+      });
+    }).finally(() => {
+      ritualRunning = false;
+    });
   }, 60_000);
   ritualTimer.unref();
 }
@@ -1001,13 +1315,12 @@ function setupCircles(options: GateServerOptions, flowBus: FlowBus) {
   for (const c of circles) {
     const config = circleByName(options.config, c.name);
     if (!config || !config.enabled) continue;
-    
+
     const adapter = getCircleAdapter(config.kind);
     if (adapter?.start) {
-      void adapter.start(config, { workspace: options.workspace, flowBus }).catch(err => {
+      void adapter.start(config, { workspace: options.workspace, flowBus }).catch((err) => {
         console.error(`[gate] Failed to start active circle ${config.name}:`, err);
       });
     }
   }
 }
-

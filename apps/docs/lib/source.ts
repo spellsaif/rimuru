@@ -3,5 +3,5 @@ import { docs } from "collections/server";
 
 export const source = loader({
   baseUrl: "/docs",
-  source: docs.toFumadocsSource()
+  source: docs.toFumadocsSource(),
 });

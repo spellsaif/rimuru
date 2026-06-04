@@ -2,7 +2,12 @@ import type { RuneRegistry } from "../core/runes.js";
 
 export interface McpToolCall {
   readonly method: "tools/list" | "tools/call";
-  readonly params?: { readonly name?: string; readonly arguments?: unknown; readonly workspace?: string; readonly sessionId?: string };
+  readonly params?: {
+    readonly name?: string;
+    readonly arguments?: unknown;
+    readonly workspace?: string;
+    readonly sessionId?: string;
+  };
 }
 
 export async function handleMcpCall(registry: RuneRegistry, call: McpToolCall): Promise<unknown> {
@@ -16,8 +21,8 @@ export async function handleMcpCall(registry: RuneRegistry, call: McpToolCall): 
       content: await registry.invoke(name, call.params?.arguments ?? {}, {
         workspace: call.params?.workspace ?? process.cwd(),
         sessionId: call.params?.sessionId ?? "mcp",
-        audit: true
-      })
+        audit: true,
+      }),
     };
   }
   throw new Error(`Unsupported MCP method: ${call.method}`);

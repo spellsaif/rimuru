@@ -55,7 +55,11 @@ export async function selectInteractive<T>(prompt: string, options: readonly T[]
   });
 }
 
-export async function multiSelectInteractive<T>(prompt: string, options: readonly T[], defaultIndices: number[] = []): Promise<T[]> {
+export async function multiSelectInteractive<T>(
+  prompt: string,
+  options: readonly T[],
+  defaultIndices: number[] = [],
+): Promise<T[]> {
   return new Promise((resolve) => {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     readline.emitKeypressEvents(process.stdin);
@@ -102,7 +106,7 @@ export async function multiSelectInteractive<T>(prompt: string, options: readonl
         render();
       } else if (key.name === "return" || key.name === "enter") {
         cleanup();
-        const result = Array.from(selected).map(i => options[i]);
+        const result = Array.from(selected).map((i) => options[i]);
         readline.moveCursor(process.stdout, 0, -(options.length + 1));
         readline.clearScreenDown(process.stdout);
         process.stdout.write(`\x1b[96m?\x1b[0m ${prompt} \x1b[36m${result.join(", ") || "none"}\x1b[0m\n`);
@@ -133,7 +137,6 @@ export async function inputInteractive(prompt: string, defaultValue = "", passwo
         if (chunk === "\r\n" || chunk === "\n") return originalWrite(chunk, encoding, callback);
         return originalWrite("*");
       };
-
     }
 
     rl.question("", (answer) => {
@@ -144,7 +147,9 @@ export async function inputInteractive(prompt: string, defaultValue = "", passwo
       readline.moveCursor(process.stdout, 0, -1);
       readline.clearScreenDown(process.stdout);
       const displayValue = password && result ? "*".repeat(Math.min(result.length, 12)) : result;
-      process.stdout.write(`\x1b[96m?\x1b[0m ${prompt} \x1b[36m${displayValue || (defaultValue ? defaultValue : "empty")}\x1b[0m\n`);
+      process.stdout.write(
+        `\x1b[96m?\x1b[0m ${prompt} \x1b[36m${displayValue || (defaultValue ? defaultValue : "empty")}\x1b[0m\n`,
+      );
       resolve(result);
     });
   });

@@ -6,7 +6,11 @@ describe("RuneRegistry", () => {
     const registry = new RuneRegistry();
     registry.register(workspaceRune);
 
-    const result = await registry.invoke("workspace.ask", { question: "where am I?" }, { workspace: "/isekai", sessionId: "s1" });
+    const result = await registry.invoke(
+      "workspace.ask",
+      { question: "where am I?" },
+      { workspace: "/isekai", sessionId: "s1" },
+    );
 
     expect(registry.list().map((rune) => rune.name)).toEqual(["workspace.ask"]);
     expect(result).toEqual({ answer: "Workspace /isekai received: where am I?" });
@@ -34,24 +38,32 @@ describe("RuneRegistry", () => {
             required: ["id", "tags"],
             properties: {
               id: { type: "number" as const },
-              tags: { type: "array" as const }
-            }
-          }
-        }
+              tags: { type: "array" as const },
+            },
+          },
+        },
       },
       async invoke(input: any) {
         return input;
-      }
+      },
     };
     registry.register(nestedRune);
 
     // Valid nested input
-    const valid = await registry.invoke("test.nested", { meta: { id: 123, tags: ["foo"] } }, { workspace: "/isekai", sessionId: "s1" });
+    const valid = await registry.invoke(
+      "test.nested",
+      { meta: { id: 123, tags: ["foo"] } },
+      { workspace: "/isekai", sessionId: "s1" },
+    );
     expect(valid).toEqual({ meta: { id: 123, tags: ["foo"] } });
 
     // Invalid nested input
     await expect(
-      registry.invoke("test.nested", { meta: { id: "not-a-number", tags: ["foo"] } }, { workspace: "/isekai", sessionId: "s1" })
+      registry.invoke(
+        "test.nested",
+        { meta: { id: "not-a-number", tags: ["foo"] } },
+        { workspace: "/isekai", sessionId: "s1" },
+      ),
     ).rejects.toThrow("meta.id: ");
   });
 
@@ -59,9 +71,21 @@ describe("RuneRegistry", () => {
     const registry = new RuneRegistry();
     registry.register(workspaceRune);
 
-    const resultLower = await registry.invoke("workspace.ask", { question: "test" }, { workspace: "/tmp", sessionId: "s" });
-    const resultUpper = await registry.invoke("WORKSPACE.ASK", { question: "test" }, { workspace: "/tmp", sessionId: "s" });
-    const resultMix = await registry.invoke("WorkSpace.AsK", { question: "test" }, { workspace: "/tmp", sessionId: "s" });
+    const resultLower = await registry.invoke(
+      "workspace.ask",
+      { question: "test" },
+      { workspace: "/tmp", sessionId: "s" },
+    );
+    const resultUpper = await registry.invoke(
+      "WORKSPACE.ASK",
+      { question: "test" },
+      { workspace: "/tmp", sessionId: "s" },
+    );
+    const resultMix = await registry.invoke(
+      "WorkSpace.AsK",
+      { question: "test" },
+      { workspace: "/tmp", sessionId: "s" },
+    );
 
     expect(resultLower).toBeDefined();
     expect(resultUpper).toBeDefined();

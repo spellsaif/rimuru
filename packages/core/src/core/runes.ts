@@ -1,7 +1,7 @@
+import { z } from "zod";
 import { appendAuditEvent } from "./audit.js";
 import type { Flow } from "./types.js";
 import type { PermissionPolicy, Rune, RuneContext, RuneSchema } from "./types.js";
-import { z } from "zod";
 
 export interface RuneRegistryOptions {
   readonly policy?: PermissionPolicy;
@@ -54,13 +54,19 @@ export class RuneRegistry {
     return [...this.#runes.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  describe(): readonly { readonly name: string; readonly description: string; readonly risk: string; readonly inputSchema?: RuneSchema; readonly outputSchema?: RuneSchema }[] {
+  describe(): readonly {
+    readonly name: string;
+    readonly description: string;
+    readonly risk: string;
+    readonly inputSchema?: RuneSchema;
+    readonly outputSchema?: RuneSchema;
+  }[] {
     return this.list().map((rune) => ({
       name: rune.name,
       description: rune.description,
       risk: rune.risk,
       ...(rune.inputSchema ? { inputSchema: rune.inputSchema } : {}),
-      ...(rune.outputSchema ? { outputSchema: rune.outputSchema } : {})
+      ...(rune.outputSchema ? { outputSchema: rune.outputSchema } : {}),
     }));
   }
 
@@ -75,28 +81,54 @@ export class RuneRegistry {
       risk: rune.risk,
       input,
       workspace: context.workspace,
-      sessionId: context.sessionId
+      sessionId: context.sessionId,
     });
     if (decision && !decision.allowed) {
       this.#emit?.({ type: "rune.denied", rune: name, reason: decision.reason, at: this.#clock() });
-      await audit(context, { type: "rune.denied", sessionId: context.sessionId, rune: name, risk: rune.risk, input, reason: decision.reason });
+      await audit(context, {
+        type: "rune.denied",
+        sessionId: context.sessionId,
+        rune: name,
+        risk: rune.risk,
+        input,
+        reason: decision.reason,
+      });
       throw new Error(`Rune denied: ${name}: ${decision.reason}`);
     }
-    await audit(context, { type: "rune.allowed", sessionId: context.sessionId, rune: name, risk: rune.risk, input, reason: decision?.reason ?? "no policy configured" });
+    await audit(context, {
+      type: "rune.allowed",
+      sessionId: context.sessionId,
+      rune: name,
+      risk: rune.risk,
+      input,
+      reason: decision?.reason ?? "no policy configured",
+    });
     try {
       const state = context.state ?? {};
       const enrichedContext: RuneContext = {
         ...context,
         registry: this,
-        state
+        state,
       };
       const output = await rune.invoke(input, enrichedContext);
       validateSchema(rune.outputSchema, output, `Rune output invalid: ${name}`);
       this.#emit?.({ type: "rune.completed", rune: name, at: this.#clock() });
-      await audit(context, { type: "rune.completed", sessionId: context.sessionId, rune: name, risk: rune.risk, output });
+      await audit(context, {
+        type: "rune.completed",
+        sessionId: context.sessionId,
+        rune: name,
+        risk: rune.risk,
+        output,
+      });
       return output;
     } catch (error) {
-      await audit(context, { type: "rune.failed", sessionId: context.sessionId, rune: name, risk: rune.risk, error: error instanceof Error ? error.message : String(error) });
+      await audit(context, {
+        type: "rune.failed",
+        sessionId: context.sessionId,
+        rune: name,
+        risk: rune.risk,
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw error;
     }
   }
@@ -112,20 +144,34 @@ export class RuneRegistry {
       risk: rune.risk,
       input,
       workspace: context.workspace,
-      sessionId: context.sessionId
+      sessionId: context.sessionId,
     });
     if (decision && !decision.allowed) {
       this.#emit?.({ type: "rune.denied", rune: name, reason: decision.reason, at: this.#clock() });
-      await audit(context, { type: "rune.denied", sessionId: context.sessionId, rune: name, risk: rune.risk, input, reason: decision.reason });
+      await audit(context, {
+        type: "rune.denied",
+        sessionId: context.sessionId,
+        rune: name,
+        risk: rune.risk,
+        input,
+        reason: decision.reason,
+      });
       throw new Error(`Rune denied: ${name}: ${decision.reason}`);
     }
-    await audit(context, { type: "rune.allowed", sessionId: context.sessionId, rune: name, risk: rune.risk, input, reason: decision?.reason ?? "no policy configured" });
+    await audit(context, {
+      type: "rune.allowed",
+      sessionId: context.sessionId,
+      rune: name,
+      risk: rune.risk,
+      input,
+      reason: decision?.reason ?? "no policy configured",
+    });
     try {
       const state = context.state ?? {};
       const enrichedContext: RuneContext = {
         ...context,
         registry: this,
-        state
+        state,
       };
       if (rune.invokeStream) {
         for await (const chunk of rune.invokeStream(input, enrichedContext)) {
@@ -137,9 +183,21 @@ export class RuneRegistry {
         yield output;
       }
       this.#emit?.({ type: "rune.completed", rune: name, at: this.#clock() });
-      await audit(context, { type: "rune.completed", sessionId: context.sessionId, rune: name, risk: rune.risk, output: "stream completed" });
+      await audit(context, {
+        type: "rune.completed",
+        sessionId: context.sessionId,
+        rune: name,
+        risk: rune.risk,
+        output: "stream completed",
+      });
     } catch (error) {
-      await audit(context, { type: "rune.failed", sessionId: context.sessionId, rune: name, risk: rune.risk, error: error instanceof Error ? error.message : String(error) });
+      await audit(context, {
+        type: "rune.failed",
+        sessionId: context.sessionId,
+        rune: name,
+        risk: rune.risk,
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw error;
     }
   }
@@ -153,9 +211,9 @@ export const workspaceRune: Rune<{ readonly question: string }, { readonly answe
   outputSchema: { type: "object", required: ["answer"], properties: { answer: { type: "string" } } },
   async invoke(input, context) {
     return {
-      answer: `Workspace ${context.workspace} received: ${input.question}`
+      answer: `Workspace ${context.workspace} received: ${input.question}`,
     };
-  }
+  },
 };
 
 function buildZodSchema(schema: any): z.ZodType<any> {
@@ -187,7 +245,9 @@ function validateSchema(schema: RuneSchema | undefined, value: unknown, prefix: 
   const zodSchema = buildZodSchema(schema);
   const result = zodSchema.safeParse(value);
   if (!result.success) {
-    throw new Error(`${prefix}: ${result.error.issues.map((e: any) => `${e.path.join(".")}: ${e.message}`).join(", ")}`);
+    throw new Error(
+      `${prefix}: ${result.error.issues.map((e: any) => `${e.path.join(".")}: ${e.message}`).join(", ")}`,
+    );
   }
 }
 

@@ -2,7 +2,6 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { RuntimeConfig, GateStatus } from "@rimuru/core";
 
-
 export interface GateState {
   readonly pid: number;
   readonly url: string;
@@ -28,7 +27,7 @@ export function getGateStatus(config: RuntimeConfig, workspace: string): GateSta
     shard: config.provider,
     model: config.model,
     vows: config.allowedRisks,
-    barrier: config.sandboxMode
+    barrier: config.sandboxMode,
   };
 }
 
@@ -42,12 +41,25 @@ export async function readGateState(workspace: string): Promise<GateState | unde
   try {
     const raw = await readFile(gateStatePath(workspace), "utf8");
     const parsed = JSON.parse(raw);
-    if (typeof parsed.pid !== "number" || typeof parsed.url !== "string" || typeof parsed.host !== "string" || typeof parsed.port !== "number" || typeof parsed.workspace !== "string" || typeof parsed.startedAt !== "string")
+    if (
+      typeof parsed.pid !== "number" ||
+      typeof parsed.url !== "string" ||
+      typeof parsed.host !== "string" ||
+      typeof parsed.port !== "number" ||
+      typeof parsed.workspace !== "string" ||
+      typeof parsed.startedAt !== "string"
+    )
       return undefined;
-    return { pid: parsed.pid, url: parsed.url, host: parsed.host, port: parsed.port, workspace: parsed.workspace, startedAt: parsed.startedAt };
+    return {
+      pid: parsed.pid,
+      url: parsed.url,
+      host: parsed.host,
+      port: parsed.port,
+      workspace: parsed.workspace,
+      startedAt: parsed.startedAt,
+    };
   } catch (error) {
-    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT")
-      return undefined;
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return undefined;
     throw error;
   }
 }
@@ -59,21 +71,19 @@ export async function clearGateState(workspace: string): Promise<void> {
 export async function getGateRuntimeStatus(config: RuntimeConfig, workspace: string): Promise<GateRuntimeStatus> {
   const status = getGateStatus(config, workspace);
   const state = await readGateState(workspace);
-  if (!state)
-    return { ...status, runtime: "stopped" };
+  if (!state) return { ...status, runtime: "stopped" };
   return {
     ...status,
     runtime: isProcessAlive(state.pid) ? "running" : "stale",
     pid: state.pid,
     url: state.url,
-    startedAt: state.startedAt
+    startedAt: state.startedAt,
   };
 }
 
 export async function stopGate(workspace: string): Promise<{ stopped: boolean; pid?: number; reason?: string }> {
   const state = await readGateState(workspace);
-  if (!state)
-    return { stopped: false, reason: "Gate is not running" };
+  if (!state) return { stopped: false, reason: "Gate is not running" };
   if (!isProcessAlive(state.pid)) {
     await clearGateState(workspace);
     return { stopped: false, pid: state.pid, reason: "Gate state was stale" };

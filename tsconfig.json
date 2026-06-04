@@ -9,28 +9,18 @@
     "exactOptionalPropertyTypes": true,
     "skipLibCheck": true,
     "ignoreDeprecations": "6.0",
-    "types": [
-      "node"
-    ],
+    "types": ["node"],
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./*"
-      ],
-      "collections/*": [
-        "./.source/*"
-      ]
+      "@/*": ["./*"],
+      "collections/*": ["./.source/*"]
     },
     "plugins": [
       {
         "name": "next"
       }
     ],
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
+    "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "noEmit": true,
     "incremental": true,
@@ -50,9 +40,5 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": [
-    "dist",
-    "node_modules",
-    "tests"
-  ]
+  "exclude": ["dist", "node_modules", "tests"]
 }

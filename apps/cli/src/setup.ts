@@ -2,8 +2,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import * as p from "@clack/prompts";
 import chalk from "chalk";
-import { 
-  type CircleConfig, 
+import {
+  type CircleConfig,
   type ProviderKind,
   FlowBus,
   JsonChronicle,
@@ -11,7 +11,7 @@ import {
   Sovereign,
   createShard,
   loadRuntimeConfig,
-  writeSystemdUserService
+  writeSystemdUserService,
 } from "@rimuru/core";
 import { setVaultSecret } from "@rimuru/vault";
 import { runInteractiveTui } from "./interactive.js";
@@ -37,7 +37,9 @@ export interface SetupResult {
 
 export async function setupWorkspace(options: SetupOptions): Promise<SetupResult> {
   const root = options.workspace;
-  const created = ["sessions", "traces", "plugins", "rollbacks", "canvas", "rituals"].map((name) => join(root, ".rimuru", name));
+  const created = ["sessions", "traces", "plugins", "rollbacks", "canvas", "rituals"].map((name) =>
+    join(root, ".rimuru", name),
+  );
   for (const path of created) await mkdir(path, { recursive: true });
   const configPath = join(root, "rimuru.config.json");
   const vessel = options.vessel ?? "main";
@@ -52,13 +54,17 @@ export async function setupWorkspace(options: SetupOptions): Promise<SetupResult
         model: options.model ?? defaultModel(provider),
         soul: options.soul ?? "default",
         vows: options.vows ?? ["read"],
-        barrier: options.barrier ?? "none"
-      }
+        barrier: options.barrier ?? "none",
+      },
     },
-    circles: options.circles ?? [{ name: "local", kind: "local", enabled: true }]
+    circles: options.circles ?? [{ name: "local", kind: "local", enabled: true }],
   };
-  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, { encoding: "utf8", flag: options.force ? "w" : "wx" }).catch((error: unknown) => {
-    if (!options.force && typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST") return;
+  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, {
+    encoding: "utf8",
+    flag: options.force ? "w" : "wx",
+  }).catch((error: unknown) => {
+    if (!options.force && typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST")
+      return;
     throw error;
   });
   await createOnboardingDocs(root, config);
@@ -105,7 +111,9 @@ You are here to help the user manage their code, tasks, and data within this dir
   await writeFile(join(root, "SOUL.md"), soulMd.trim() + "\n", "utf8");
 }
 
-export async function setupWorkspaceInteractive(options: Pick<SetupOptions, "workspace" | "force">): Promise<SetupResult> {
+export async function setupWorkspaceInteractive(
+  options: Pick<SetupOptions, "workspace" | "force">,
+): Promise<SetupResult> {
   p.intro(chalk.bgCyan.black(" RIMURU AWAKENING "));
 
   const project = await p.group(
@@ -118,20 +126,20 @@ export async function setupWorkspaceInteractive(options: Pick<SetupOptions, "wor
             { label: "OpenRouter (Universal)", value: "openrouter" },
             { label: "Gemini (Google)", value: "gemini" },
             { label: "Ollama (Local-First)", value: "ollama" },
-            { label: "OpenAI-Compatible", value: "openai-compatible" }
-          ]
+            { label: "OpenAI-Compatible", value: "openai-compatible" },
+          ],
         }),
       apiKey: ({ results }) => {
         if (results.provider === "ollama") return Promise.resolve("");
         return p.password({
           message: `API Key for ${results.provider}:`,
-          validate: (v) => (v && v.length < 5 ? "API key seems too short" : undefined)
+          validate: (v) => (v && v.length < 5 ? "API key seems too short" : undefined),
         });
       },
       model: ({ results }) =>
         p.text({
           message: "Model Name:",
-          initialValue: defaultModel(results.provider as ProviderKind)
+          initialValue: defaultModel(results.provider as ProviderKind),
         }),
       vows: () =>
         p.multiselect({
@@ -140,9 +148,9 @@ export async function setupWorkspaceInteractive(options: Pick<SetupOptions, "wor
             { label: "Read (Files & Workspace)", value: "read" },
             { label: "Write (Create & Edit)", value: "write" },
             { label: "Execute (Shell & Tools)", value: "execute" },
-            { label: "Network (Remote access)", value: "network" }
+            { label: "Network (Remote access)", value: "network" },
           ],
-          initialValues: ["read"]
+          initialValues: ["read"],
         }),
       barrier: () =>
         p.select({
@@ -151,22 +159,22 @@ export async function setupWorkspaceInteractive(options: Pick<SetupOptions, "wor
             { label: "None (Raw access)", value: "none" },
             { label: "Read-only (Safety first)", value: "readonly" },
             { label: "Docker (Maximum isolation)", value: "docker" },
-            { label: "WASI (Lightweight WebAssembly sandbox)", value: "wasi" }
-          ]
-        })
+            { label: "WASI (Lightweight WebAssembly sandbox)", value: "wasi" },
+          ],
+        }),
     },
     {
       onCancel: () => {
         p.cancel("Awakening cancelled.");
         process.exit(0);
-      }
-    }
+      },
+    },
   );
 
   // --- CIRCLES & WEBHOOKS ONBOARDING ---
   const setupCircles = await p.confirm({
     message: "Would you like to configure external messaging channels (Circles)?",
-    initialValue: false
+    initialValue: false,
   });
 
   const circles: CircleConfig[] = [{ name: "local", kind: "local", enabled: true }];
@@ -176,14 +184,14 @@ export async function setupWorkspaceInteractive(options: Pick<SetupOptions, "wor
       options: [
         { label: "Slack", value: "slack" },
         { label: "Discord", value: "discord" },
-        { label: "Telegram", value: "telegram" }
-      ]
+        { label: "Telegram", value: "telegram" },
+      ],
     });
 
     if (circleKind && !p.isCancel(circleKind)) {
       const circleName = await p.text({
         message: "Enter a name for this Circle channel:",
-        initialValue: `my-${circleKind}`
+        initialValue: `my-${circleKind}`,
       });
 
       if (circleName && !p.isCancel(circleName)) {
@@ -196,7 +204,7 @@ export async function setupWorkspaceInteractive(options: Pick<SetupOptions, "wor
               kind: "slack",
               enabled: true,
               token: String(token),
-              signingSecret: String(signingSecret)
+              signingSecret: String(signingSecret),
             });
           }
         } else if (circleKind === "discord") {
@@ -208,7 +216,7 @@ export async function setupWorkspaceInteractive(options: Pick<SetupOptions, "wor
               kind: "discord",
               enabled: true,
               token: String(token),
-              publicKey: String(publicKey)
+              publicKey: String(publicKey),
             });
           }
         } else if (circleKind === "telegram") {
@@ -218,7 +226,7 @@ export async function setupWorkspaceInteractive(options: Pick<SetupOptions, "wor
               name: String(circleName),
               kind: "telegram",
               enabled: true,
-              token: String(token)
+              token: String(token),
             });
           }
         }
@@ -229,7 +237,7 @@ export async function setupWorkspaceInteractive(options: Pick<SetupOptions, "wor
   // --- BACKGROUND DAEMON (SYSTEMD USER SERVICE) ONBOARDING ---
   const installDaemon = await p.confirm({
     message: "Would you like to install Rimuru as a background autostart daemon (systemd user service)?",
-    initialValue: false
+    initialValue: false,
   });
 
   const spinner = p.spinner();
@@ -242,13 +250,14 @@ export async function setupWorkspaceInteractive(options: Pick<SetupOptions, "wor
     vows: project.vows as string[],
     barrier: project.barrier as any,
     circles,
-    force: true
+    force: true,
   });
 
   const apiKey = project.apiKey as string;
   if (apiKey) {
     const provider = project.provider as string;
-    const envKey = provider === "openai-compatible" ? "RIMURU_API_KEY" : `RIMURU_${provider.toUpperCase().replace("-", "_")}_KEY`;
+    const envKey =
+      provider === "openai-compatible" ? "RIMURU_API_KEY" : `RIMURU_${provider.toUpperCase().replace("-", "_")}_KEY`;
     await setVaultSecret(options.workspace, "RIMURU_API_KEY", apiKey);
     await setVaultSecret(options.workspace, envKey, apiKey);
   }
@@ -265,7 +274,7 @@ export async function setupWorkspaceInteractive(options: Pick<SetupOptions, "wor
 
   p.note(
     `1. Edit ${chalk.cyan("SOUL.md")} to change personality.\n2. Add tools to folders with ${chalk.cyan("RUNE.md")}.\n3. View your manifest in ${chalk.cyan("RIMURU.md")}.`,
-    "Next Steps"
+    "Next Steps",
   );
 
   p.outro(`Run ${chalk.cyan("rimuru dash")} to see the live dashboard.`);
@@ -273,7 +282,7 @@ export async function setupWorkspaceInteractive(options: Pick<SetupOptions, "wor
   // --- SEAMLESS HANDOVER TO TUI ---
   const startChat = await p.confirm({
     message: "Would you like to start talking to Rimuru now?",
-    initialValue: true
+    initialValue: true,
   });
 
   if (startChat && !p.isCancel(startChat)) {
@@ -281,7 +290,7 @@ export async function setupWorkspaceInteractive(options: Pick<SetupOptions, "wor
     const config = await loadRuntimeConfig({ workspace: options.workspace });
     const flowBus = new FlowBus();
     const chronicle = new JsonChronicle(resolve(config.memoryDir));
-    
+
     await runInteractiveTui({
       sovereign: new Sovereign({ shard: createShard(config), chronicle, flowBus }),
       flowBus,
@@ -290,7 +299,7 @@ export async function setupWorkspaceInteractive(options: Pick<SetupOptions, "wor
       workspace: options.workspace,
       sessionId: config.sessionId,
       provider: config.provider,
-      model: config.model
+      model: config.model,
     });
   }
 

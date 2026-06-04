@@ -10,11 +10,7 @@ export default defineConfig({
   publicDir: "public",
   target: "node20",
   // Bundle internal workspace packages
-  noExternal: [
-    "@rimuru/core",
-    "@rimuru/gate",
-    "@rimuru/vault"
-  ],
+  noExternal: ["@rimuru/core", "@rimuru/gate", "@rimuru/vault"],
   shims: true, // Fix for some CJS dependencies
   external: [
     "puppeteer-core",
@@ -34,8 +30,6 @@ export default defineConfig({
     "http",
     "https",
     "zlib",
-    "whatsapp-web.js"
-  ]
+    "whatsapp-web.js",
+  ],
 });
-
-

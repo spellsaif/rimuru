@@ -1,10 +1,9 @@
+import type { FlowBus } from "../core/events.js";
 import type { RuneRegistry } from "../core/runes.js";
 import type { Sovereign } from "../core/sovereign.js";
-import type { RunResult, Flow, Chronicle, Message } from "../core/types.js";
-import { FlowBus } from "../core/events.js";
-import { planObjective, type Plan } from "../planner/planner.js";
+import type { Chronicle, Message, RunResult } from "../core/types.js";
+import { type Plan, planObjective } from "../planner/planner.js";
 import { createWorkspaceBranch, deleteWorkspaceBranch, mergeWorkspaceBranch } from "../security/branch.js";
-
 
 export interface AgentObservation {
   readonly step: number;
@@ -22,16 +21,18 @@ export interface AgentRunResult {
 }
 
 export class AgentLoop {
-  constructor(private readonly options: { 
-    readonly sovereign: Sovereign; 
-    readonly runes: RuneRegistry; 
-    readonly workspace: string;
-    readonly sessionId: string;
-    readonly maxSteps?: number;
-    readonly audit?: boolean;
-    readonly flowBus?: FlowBus;
-    readonly chronicle?: Chronicle;
-  }) {}
+  constructor(
+    private readonly options: {
+      readonly sovereign: Sovereign;
+      readonly runes: RuneRegistry;
+      readonly workspace: string;
+      readonly sessionId: string;
+      readonly maxSteps?: number;
+      readonly audit?: boolean;
+      readonly flowBus?: FlowBus;
+      readonly chronicle?: Chronicle;
+    },
+  ) {}
 
   /**
    * Spawns a speculative execution branch in a parallel workspace timeline.
@@ -51,13 +52,11 @@ export class AgentLoop {
     const childLoop = new AgentLoop({
       ...this.options,
       workspace: branchDir,
-      sessionId: childSessionId
+      sessionId: childSessionId,
     });
 
     return await childLoop.run(objective);
   }
-
-
 
   /**
    * Runs a dynamic ReAct (Reason+Act) loop to solve the objective.
@@ -75,47 +74,46 @@ export class AgentLoop {
 
     const observations: AgentObservation[] = [];
     const maxSteps = this.options.maxSteps ?? 10;
-    const runes = this.options.runes.describe().map((r) => ({ name: r.name, description: r.description, inputSchema: r.inputSchema }));
+    const runes = this.options.runes
+      .describe()
+      .map((r) => ({ name: r.name, description: r.description, inputSchema: r.inputSchema }));
 
     let currentStatus = "working";
 
     let lastToolCall: { id: string; name: string } | undefined;
+    let lastTurn: RunResult | undefined;
 
     for (let step = 1; step <= maxSteps; step++) {
-      let turnRequest: any;
+      const parser = onText ? new ReActStreamParser((text) => process.stdout.write(text)) : undefined;
+      const turnRequest: any = {
+        workspace: this.options.workspace,
+        sessionId: tempSessionId,
+        tools: runes,
+        ...(parser ? { onText: (chunk: string) => parser.ingest(chunk) } : {}),
+      };
+
       if (step === 1) {
-        turnRequest = {
-          prompt: this.buildFirstTurnPrompt(objective, runes),
-          workspace: this.options.workspace,
-          sessionId: tempSessionId,
-          tools: runes
-        };
+        turnRequest.prompt = this.buildFirstTurnPrompt(objective, runes);
       } else if (lastToolCall) {
         const prev = observations[observations.length - 1]!;
         const content = typeof prev.output === "string" ? prev.output : JSON.stringify(prev.output ?? prev.error);
-        turnRequest = {
-          promptMessage: {
-            role: "tool",
-            name: lastToolCall.name,
-            toolCallId: lastToolCall.id,
-            content,
-            createdAt: new Date()
-          },
-          workspace: this.options.workspace,
-          sessionId: tempSessionId,
-          tools: runes
+        turnRequest.promptMessage = {
+          role: "tool",
+          name: lastToolCall.name,
+          toolCallId: lastToolCall.id,
+          content,
+          createdAt: new Date(),
         };
       } else {
         const prev = observations[observations.length - 1]!;
-        turnRequest = {
-          prompt: `Observation: ${JSON.stringify(prev.output ?? prev.error)}`,
-          workspace: this.options.workspace,
-          sessionId: tempSessionId,
-          tools: runes
-        };
+        turnRequest.prompt = `Observation: ${JSON.stringify(prev.output ?? prev.error)}`;
       }
-      
+
       const turn = await this.options.sovereign.run(turnRequest);
+      lastTurn = turn;
+      if (parser) {
+        parser.flush();
+      }
 
       let thoughtProcess: { type: "call" | "finish"; thought: string; rune?: string; input?: unknown } | undefined;
       lastToolCall = undefined;
@@ -130,7 +128,7 @@ export class AgentLoop {
             type: "call",
             thought: turn.response.content || `Calling tool ${tc.name}`,
             rune: tc.name,
-            input: tc.arguments
+            input: tc.arguments,
           };
         }
       } else {
@@ -140,15 +138,16 @@ export class AgentLoop {
       if (thoughtProcess?.thought) {
         this.options.flowBus?.emit({ type: "thought.emitted", thought: thoughtProcess.thought, at: new Date() });
       }
-      
+
       if (!thoughtProcess) {
-        const errorMsg = "Format Error: Your response did not follow the ReAct loop format. You must start with 'Thought: <reasoning>', followed by 'Action: <rune_name_or_finish>', and then 'Input: <json_input>' on the next lines. Please correct your formatting.";
+        const errorMsg =
+          "Format Error: Your response did not follow the ReAct loop format. You must start with 'Thought: <reasoning>', followed by 'Action: <rune_name_or_finish>', and then 'Input: <json_input>' on the next lines. Please correct your formatting.";
         observations.push({
           step,
           thought: "Formatting parse failed",
-          error: errorMsg
+          error: errorMsg,
         });
-        if (onText) {
+        if (onText && !parser) {
           onText(`\x1b[31mParse Error: Invalid ReAct response format.\x1b[0m\n`);
         }
         continue;
@@ -176,7 +175,7 @@ export class AgentLoop {
             output = await this.options.runes.invoke(rune, input, {
               workspace: branchDir,
               sessionId: tempSessionId,
-              audit: this.options.audit ?? true
+              audit: this.options.audit ?? true,
             });
             await mergeWorkspaceBranch(this.options.workspace, branchId);
           } finally {
@@ -186,7 +185,7 @@ export class AgentLoop {
           output = await this.options.runes.invoke(rune, input, {
             workspace: this.options.workspace,
             sessionId: tempSessionId,
-            audit: this.options.audit ?? true
+            audit: this.options.audit ?? true,
           });
         }
       } catch (e) {
@@ -199,10 +198,10 @@ export class AgentLoop {
         rune,
         input,
         output,
-        error
+        error,
       });
 
-      if (onText) {
+      if (onText && !parser) {
         onText(`\x1b[90mThought: ${thought}\x1b[0m\n`);
         if (rune) onText(`\x1b[36mInvoke: ${rune}\x1b[0m\n`);
       }
@@ -211,28 +210,33 @@ export class AgentLoop {
     const plan = planObjective(objective);
 
     // Final synthesis
-    const final = await this.options.sovereign.run({
-      prompt: `Objective: ${objective}\n\nBased on the execution history, provide the final conversational answer to the user. Do NOT use the ReAct format (Thought/Action/Input) here; respond directly to the user.`,
-      workspace: this.options.workspace,
-      sessionId: tempSessionId,
-      ...(onText ? { onText } : {})
-    });
+    let final: RunResult;
+    if (observations.length === 0 && lastTurn) {
+      final = lastTurn;
+    } else {
+      final = await this.options.sovereign.run({
+        prompt: `Objective: ${objective}\n\nBased on the execution history, provide the final conversational answer to the user. Do NOT use the ReAct format (Thought/Action/Input) here; respond directly to the user.`,
+        workspace: this.options.workspace,
+        sessionId: tempSessionId,
+        ...(onText ? { onText } : {}),
+      });
+    }
 
     if (this.options.chronicle && this.options.chronicle.overwrite) {
       const userObjectiveMessage: Message = {
         role: "user",
         content: objective,
-        createdAt: new Date()
+        createdAt: new Date(),
       };
       const finalAssistantMessage: Message = {
         role: "assistant",
         content: final.response.content,
-        createdAt: new Date()
+        createdAt: new Date(),
       };
       await this.options.chronicle.overwrite(this.options.sessionId, [
         ...startingHistory,
         userObjectiveMessage,
-        finalAssistantMessage
+        finalAssistantMessage,
       ]);
     }
 
@@ -246,19 +250,22 @@ export class AgentLoop {
   private buildFirstTurnPrompt(objective: string, runes: unknown[]): string {
     return [
       `You are an AI Agent working toward this objective: "${objective}"`,
-      "Use the following ReAct loop format:",
+      "If the objective is a simple greeting, conversational reply, or question that can be answered directly without executing any runes, respond directly to the user and do NOT use the ReAct format.",
+      "Otherwise, you MUST use the following ReAct loop format:",
       "Thought: (Reason about what to do next)",
       "Action: (The rune to call, or 'finish' if done)",
       "Input: (The JSON input for the rune)",
       "",
       `Available Runes: ${JSON.stringify(runes, null, 2)}`,
       "",
-      "Please output your first Thought, Action, and Input."
+      "Please output your first Thought, Action, and Input or respond directly.",
     ].join("\n");
   }
 }
 
-function parseAction(content: string): { type: "call" | "finish"; thought: string; rune?: string; input?: unknown } | undefined {
+function parseAction(
+  content: string,
+): { type: "call" | "finish"; thought: string; rune?: string; input?: unknown } | undefined {
   const thoughtMatch = content.match(/Thought:\s*(.*)/i);
   const actionMatch = content.match(/Action:\s*([a-zA-Z0-9._-]+)/i);
   const inputMatch = content.match(/Input:\s*(\{[\s\S]*\})/);
@@ -267,7 +274,7 @@ function parseAction(content: string): { type: "call" | "finish"; thought: strin
   const action = actionMatch?.[1]?.toLowerCase();
 
   if (action === "finish") return { type: "finish", thought };
-  
+
   if (action && inputMatch) {
     try {
       const input = JSON.parse(inputMatch[1]);
@@ -284,4 +291,136 @@ function parseAction(content: string): { type: "call" | "finish"; thought: strin
   }
 
   return undefined;
+}
+
+export class ReActStreamParser {
+  private state: "none" | "thought" | "action" | "input" | "direct" = "none";
+  private buffer = "";
+
+  constructor(private readonly write: (text: string) => void) {}
+
+  ingest(chunk: string) {
+    this.buffer += chunk;
+
+    while (true) {
+      const prevState = this.state;
+      const prevBufferLen = this.buffer.length;
+
+      if (this.state === "none") {
+        const match = this.buffer.match(/thought:\s*/i);
+        if (match) {
+          this.state = "thought";
+          this.write("\x1b[90m🧠 ");
+          const remaining = this.buffer.slice(match.index! + match[0].length);
+          this.buffer = remaining;
+        } else {
+          const thoughtPrefix = "thought:";
+          const trimmed = this.buffer.trim().toLowerCase();
+          const isPrefix = thoughtPrefix.startsWith(trimmed) || trimmed === "";
+          if (isPrefix && this.buffer.length <= 20) {
+            break;
+          } else {
+            this.state = "direct";
+            this.write(this.buffer);
+            this.buffer = "";
+          }
+        }
+      } else if (this.state === "thought") {
+        const match = this.buffer.match(/\r?\n\s*action:\s*/i);
+        if (match) {
+          const textBefore = this.buffer.slice(0, match.index);
+          if (textBefore) {
+            this.write(textBefore);
+          }
+          this.write("\x1b[0m\n");
+          this.state = "action";
+          const remaining = this.buffer.slice(match.index! + match[0].length);
+          this.buffer = remaining;
+        } else {
+          const prefixLen = getPotentialActionPrefixLength(this.buffer);
+          if (prefixLen > 0) {
+            const safeLen = this.buffer.length - prefixLen;
+            if (safeLen > 0) {
+              const safeText = this.buffer.slice(0, safeLen);
+              this.write(safeText);
+              this.buffer = this.buffer.slice(safeLen);
+            }
+            break;
+          } else {
+            this.write(this.buffer);
+            this.buffer = "";
+            break;
+          }
+        }
+      } else if (this.state === "action") {
+        const indexN = this.buffer.indexOf("\n");
+        const indexR = this.buffer.indexOf("\r");
+        const firstNewline =
+          indexN !== -1 && indexR !== -1 ? Math.min(indexN, indexR) : indexN !== -1 ? indexN : indexR;
+        if (firstNewline !== -1) {
+          const runeName = this.buffer.slice(0, firstNewline).trim();
+          if (runeName && runeName.toLowerCase() !== "finish") {
+            this.write(`\x1b[36m⚡ Running ${runeName}...\x1b[0m\n`);
+          }
+          this.state = "input";
+          const remaining = this.buffer.slice(firstNewline + 1);
+          this.buffer = remaining;
+        } else {
+          break;
+        }
+      } else if (this.state === "input") {
+        this.buffer = "";
+        break;
+      } else if (this.state === "direct") {
+        this.write(this.buffer);
+        this.buffer = "";
+        break;
+      }
+
+      if (this.state === prevState && this.buffer.length === prevBufferLen) {
+        break;
+      }
+    }
+  }
+
+  flush() {
+    if (this.state === "none" || this.state === "direct") {
+      if (this.buffer) {
+        this.write(this.buffer);
+      }
+    } else if (this.state === "thought") {
+      if (this.buffer) {
+        this.write(this.buffer);
+      }
+      this.write("\x1b[0m\n");
+    } else if (this.state === "action") {
+      const runeName = this.buffer.trim();
+      if (runeName && runeName.toLowerCase() !== "finish") {
+        this.write(`\x1b[36m⚡ Running ${runeName}...\x1b[0m\n`);
+      }
+    }
+    this.buffer = "";
+  }
+}
+
+function getPotentialActionPrefixLength(str: string): number {
+  const lastN = str.lastIndexOf("\n");
+  const lastR = str.lastIndexOf("\r");
+  const lastIndex = Math.max(lastN, lastR);
+  if (lastIndex === -1) {
+    if (str.endsWith("\r")) {
+      return 1;
+    }
+    return 0;
+  }
+
+  const suffix = str.slice(lastIndex);
+  const normalized = suffix.replace(/^[\r\n]\s*/, "");
+  if (normalized === "") {
+    return suffix.length;
+  }
+  if ("action:".startsWith(normalized.toLowerCase())) {
+    return suffix.length;
+  }
+  return 0;
 }

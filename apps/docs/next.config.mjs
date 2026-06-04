@@ -5,7 +5,7 @@ const withMDX = createMDX();
 /** @type {import('next').NextConfig} */
 const config = {
   reactStrictMode: true,
-  typedRoutes: false
+  typedRoutes: false,
 };
 
 export default withMDX(config);

@@ -4,11 +4,7 @@
     "outDir": "./dist",
     "composite": true,
     "rootDir": "./src"
-
   },
   "include": ["src/**/*"],
-  "references": [
-    { "path": "../core" },
-    { "path": "../vault" }
-  ]
+  "references": [{ "path": "../core" }, { "path": "../vault" }]
 }
