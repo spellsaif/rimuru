@@ -21,6 +21,21 @@ export class GeminiShard implements Shard {
     this.#fetch = options.fetchImpl ?? fetch;
   }
 
+  async #fetchWithRetry(url: string, init: RequestInit, maxRetries = 3): Promise<Response> {
+    for (let i = 0; i <= maxRetries; i++) {
+      const response = await this.#fetch(url, init);
+      if ((response.status !== 429 && (response.status < 500 || response.status > 599)) || i === maxRetries) {
+        return response;
+      }
+      const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+      process.stdout.write(
+        `\n\x1b[90m[provider] Rate limited or server error by Gemini (${response.status}). Retrying in ${Math.round(delay / 1000)}s...\x1b[0m\n`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+    throw new Error("Unreachable");
+  }
+
   async complete(messages: readonly Message[], options?: ShardOptions): Promise<AssistantResponse> {
     const payloadTools =
       options?.tools && options.tools.length > 0
@@ -35,7 +50,7 @@ export class GeminiShard implements Shard {
           ]
         : undefined;
 
-    const response = await this.#fetch(
+    const response = await this.#fetchWithRetry(
       `${this.#baseUrl}/models/${encodeURIComponent(this.#model)}:generateContent?key=${encodeURIComponent(this.#apiKey)}`,
       {
         method: "POST",
@@ -81,7 +96,7 @@ export class GeminiShard implements Shard {
           ]
         : undefined;
 
-    const response = await this.#fetch(
+    const response = await this.#fetchWithRetry(
       `${this.#baseUrl}/models/${encodeURIComponent(this.#model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(this.#apiKey)}`,
       {
         method: "POST",
