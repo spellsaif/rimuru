@@ -1,4 +1,4 @@
-import type { AssistantResponse, Message, Shard, ShardOptions, StreamChunk, TokenUsage } from "../core/types.js";
+import type { AssistantResponse, Message, Shard, ShardOptions, StreamChunk, TokenUsage, ToolCall } from "../core/types.js";
 
 export interface OpenAICompatibleOptions {
   readonly baseUrl: string;

@@ -117,7 +117,14 @@ export interface RuneSchema {
   readonly type: "object";
   readonly required?: readonly string[];
   readonly properties?: Readonly<
-    Record<string, { readonly type: "string" | "boolean" | "number" | "array" | "object" }>
+    Record<
+      string,
+      {
+        readonly type: "string" | "boolean" | "number" | "array" | "object";
+        readonly enum?: readonly string[];
+        readonly description?: string;
+      }
+    >
   >;
 }
 
