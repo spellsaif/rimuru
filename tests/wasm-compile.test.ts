@@ -154,6 +154,34 @@ describe("WASM/JS synthesis and compilation engine", () => {
     }
   });
 
+  it("sanitizes invalid risk levels and falls back to execute", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rimuru-risk-fallback-"));
+    try {
+      const context = {
+        workspace: root,
+        sessionId: "test-risk-fallback-session",
+        allowedRisks: ["read", "write", "execute"] as any,
+      };
+
+      const result = await compileWasmRune.invoke(
+        {
+          language: "typescript",
+          sourceCode: `globalThis.output = "ok";`,
+          name: "test_fallback",
+          description: "Tests risk fallback",
+          risk: "low" as any,
+        },
+        context as any,
+      );
+
+      const configContent = await readFile(result.configPath, "utf8");
+      const config = JSON.parse(configContent);
+      expect(config.risk).toBe("execute");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("integrates OS keychain / secret-tool lookup fallback for vault keys", async () => {
     const root = await mkdtemp(join(tmpdir(), "rimuru-vault-keychain-"));
     let originalKey: string | null = null;

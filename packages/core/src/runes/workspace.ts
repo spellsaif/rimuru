@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
-import type { Rune, RuneContext, RuneSchema } from "../core/types.js";
+import type { Rune, RuneContext, RuneSchema, RuneRisk } from "../core/types.js";
 import { applyUnifiedPatch } from "../edit/patch.js";
 import { runSandboxedCommand } from "../security/sandbox.js";
 import { assertCommandName, resolveWorkspacePath } from "../security/workspace.js";
@@ -322,7 +322,7 @@ export const compileWasmRune: Rune<
     readonly sourceCode: string;
     readonly name: string;
     readonly description: string;
-    readonly risk?: "read" | "write" | "execute";
+    readonly risk?: RuneRisk;
     readonly inputSchema?: RuneSchema;
     readonly outputSchema?: RuneSchema;
   },
@@ -340,7 +340,7 @@ export const compileWasmRune: Rune<
       sourceCode: { type: "string" },
       name: { type: "string" },
       description: { type: "string" },
-      risk: { type: "string" },
+      risk: { type: "string", enum: ["read", "write", "execute", "network"] },
       inputSchema: { type: "object" },
       outputSchema: { type: "object" },
     },
@@ -363,10 +363,13 @@ export const compileWasmRune: Rune<
     const targetPath = join(runesDir, input.name);
     const configPath = join(runesDir, `${input.name}.json`);
 
+    const allowedRisks: readonly string[] = ["read", "write", "execute", "network"];
+    const risk = input.risk && allowedRisks.includes(input.risk) ? input.risk : "execute";
+
     const runeConfig = {
       name: `custom.${input.name}`,
       description: input.description,
-      risk: input.risk || "execute",
+      risk,
       inputSchema: input.inputSchema,
       outputSchema: input.outputSchema,
     };
