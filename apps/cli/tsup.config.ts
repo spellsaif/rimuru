@@ -11,7 +11,7 @@ export default defineConfig({
   target: "node20",
   platform: "node",
   // Bundle internal workspace packages
-  noExternal: ["@rimuru/core", "@rimuru/gate", "@rimuru/vault"],
+  noExternal: ["@rimuru/core", "@rimuru/gate", "@rimuru/vault", "@rimuru/voice"],
   shims: true, // Fix for some CJS dependencies
   external: [
     "puppeteer-core",
