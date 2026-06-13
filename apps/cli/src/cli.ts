@@ -345,6 +345,14 @@ program
     await indexWorkspace(idxArgs);
   });
 
+program
+  .command("voice [args...]")
+  .description("Start continuous voice conversation loop")
+  .action(async (voiceArgs) => {
+    printBanner();
+    await voice(voiceArgs);
+  });
+
 // Set default action when no command is provided
 program.action(async () => {
   if (process.argv.slice(2).length === 0) {
@@ -614,15 +622,57 @@ async function init(): Promise<void> {
 
 async function gate(args: readonly string[]): Promise<void> {
   const subcommand = args.find((arg) => !arg.startsWith("--")) ?? "status";
-  if (subcommand !== "status" && subcommand !== "start" && subcommand !== "stop" && subcommand !== "install-service") {
+  if (subcommand !== "status" && subcommand !== "start" && subcommand !== "stop" && subcommand !== "install-service" && subcommand !== "daemon") {
     process.stderr.write(
-      "Usage: rimuru gate [status|start|stop|install-service] [--host <host>] [--port <port>] [--approvals] [--json]\n",
+      "Usage: rimuru gate [status|start|stop|install-service|daemon] [--host <host>] [--port <port>] [--approvals] [--json]\n",
     );
     process.exitCode = 1;
     return;
   }
 
   const config = await loadRuntimeConfig({ workspace: process.cwd() });
+
+  if (subcommand === "daemon") {
+    const { daemonStatus, renderSystemdService } = await import("@rimuru/gate");
+    const status = await daemonStatus(process.cwd());
+    const daemonArgs = args.slice(1);
+
+    if (daemonArgs[0] === "start") {
+      const { startDaemon } = await import("@rimuru/gate");
+      const state = await startDaemon({ config, workspace: process.cwd() });
+      process.stdout.write(`Daemon started (pid ${state.pid}). Rituals ticking every ${state.ritualIntervalMs / 1000}s.\n`);
+      await new Promise<void>(() => undefined);
+      return;
+    }
+
+    if (daemonArgs[0] === "stop") {
+      const { stopDaemon } = await import("@rimuru/gate");
+      const result = await stopDaemon(process.cwd());
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+      return;
+    }
+
+    if (daemonArgs[0] === "install-service") {
+      const svc = await renderSystemdService(process.cwd());
+      const { writeFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const path = join(process.cwd(), ".rimuru", "rimuru-daemon.service");
+      await writeFile(path, svc, "utf8");
+      process.stdout.write(`Wrote systemd service: ${path}\nCopy to /etc/systemd/system/rimuru-daemon.service and run:\n  systemctl enable --now rimuru-daemon\n`);
+      return;
+    }
+
+    process.stdout.write(
+      [
+        `Daemon ${status.running ? "running" : "stopped"}`,
+        ...(status.pid ? [`pid           ${status.pid}`] : []),
+        ...(status.startedAt ? [`startedAt     ${status.startedAt}`] : []),
+        ...(status.ritualCount !== undefined ? [`rituals       ${status.ritualCount}`] : []),
+      ].join("\n") + "\n",
+    );
+    return;
+  }
+
   const status = getGateStatus(config, process.cwd());
   if (subcommand === "stop") {
     process.stdout.write(`${JSON.stringify(await stopGate(process.cwd()), null, 2)}\n`);
@@ -1537,5 +1587,36 @@ function help(): void {
       g(" Run 'rimuru <command> --help' for specific subcommand details."),
       "",
     ].join("\n"),
+  );
+}
+
+async function voice(args: readonly string[]): Promise<void> {
+  const subcommand = args[0] ?? "start";
+  const config = await loadRuntimeConfig({ workspace: process.cwd() });
+
+  if (subcommand === "start") {
+    try {
+      const { startVoiceLoop } = await import("@rimuru/voice");
+      process.stdout.write("🎤 Starting Rimuru voice loop... (press Ctrl+C to stop)\n\n");
+      await startVoiceLoop({ config, workspace: process.cwd() });
+    } catch (e) {
+      process.stderr.write(`Voice error: ${e instanceof Error ? e.message : String(e)}\n`);
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  if (subcommand === "service") {
+    const { renderVoiceSystemdService } = await import("@rimuru/voice");
+    process.stdout.write(renderVoiceSystemdService(process.cwd()));
+    return;
+  }
+
+  process.stdout.write(
+    [
+      "Rimuru Voice",
+      "  rimuru voice start     Start continuous voice conversation",
+      "  rimuru voice service   Print systemd service unit file",
+    ].join("\n") + "\n",
   );
 }

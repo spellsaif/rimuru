@@ -53,7 +53,7 @@ export async function runSandboxedCommand(
 
     // Ensure wasm path does not escape workspace or access forbidden directories
     const wasmPath = resolve(input.workspace, `${input.command}.wasm`);
-    resolveWorkspacePath(input.workspace, wasmPath);
+    resolveWorkspacePath(input.workspace, wasmPath, { allowRimuruInternal: true });
 
     const stdoutPath = join(
       input.workspace,

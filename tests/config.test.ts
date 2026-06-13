@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
-import { loadRuntimeConfig } from "../src/index.js";
+import { loadRuntimeConfig, runtimePaths } from "../src/index.js";
 
 describe("loadRuntimeConfig", () => {
   it("uses safe mock defaults", async () => {
@@ -71,6 +71,23 @@ describe("loadRuntimeConfig", () => {
       expect(config.sessionId).toBe("env-soul");
       expect(config.allowedRisks).toEqual(["read", "execute"]);
       expect(config.sandboxMode).toBe("readonly");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("resolves relative memory directories against the workspace", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rimuru-config-"));
+    try {
+      const config = await loadRuntimeConfig({
+        workspace: root,
+        env: { RIMURU_MEMORY_DIR: ".rimuru/custom-sessions" },
+      });
+
+      expect(config.memoryDir).toBe(join(root, ".rimuru", "custom-sessions"));
+      expect(runtimePaths({ ...config, memoryDir: ".rimuru/manual-sessions" }, root).memoryDir).toBe(
+        join(root, ".rimuru", "manual-sessions"),
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }

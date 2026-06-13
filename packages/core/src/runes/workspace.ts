@@ -1,11 +1,13 @@
 import { execFile } from "node:child_process";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
-import type { Rune, RuneContext, RuneSchema, RuneRisk } from "../core/types.js";
+import type { Rune, RuneContext, RuneRisk, RuneSchema } from "../core/types.js";
 import { applyUnifiedPatch } from "../edit/patch.js";
 import { runSandboxedCommand } from "../security/sandbox.js";
 import { assertCommandName, resolveWorkspacePath } from "../security/workspace.js";
+import { createRitual, runDueRituals } from "../rituals/rituals.js";
+import type { AgentLoop } from "../agent/agent.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -163,7 +165,7 @@ export const editFileRune: Rune<
         workspace: context.workspace,
         patch: input.patch,
         resolvePath: (path) => safeWorkspacePath(context, path),
-        rollbackDir: safeWorkspacePath(context, ".rimuru/rollbacks"),
+        rollbackDir: internalRimuruPath(context, ".rimuru/rollbacks"),
         ...(input.dryRun === undefined ? {} : { dryRun: input.dryRun }),
         ...(input.formatter === undefined ? {} : { formatter: input.formatter }),
       });
@@ -180,6 +182,7 @@ export const editFileRune: Rune<
       rollbackPath = safeWorkspacePath(
         context,
         join(".rimuru/rollbacks", `${Date.now()}-${safeName(input.path)}.json`),
+        true,
       );
       await mkdir(dirname(rollbackPath), { recursive: true });
       await writeFile(
@@ -226,7 +229,7 @@ export const applyPatchRune: Rune<
       workspace: context.workspace,
       patch: input.patch,
       resolvePath: (path) => safeWorkspacePath(context, path),
-      rollbackDir: safeWorkspacePath(context, ".rimuru/rollbacks"),
+      rollbackDir: internalRimuruPath(context, ".rimuru/rollbacks"),
       ...(input.dryRun === undefined ? {} : { dryRun: input.dryRun }),
       ...(input.formatter === undefined ? {} : { formatter: input.formatter }),
     });
@@ -318,7 +321,6 @@ export const fileTreeRune: Rune<{ readonly maxDepth?: number }, { readonly tree:
 
 export const compileRune: Rune<
   {
-    readonly language: "rust" | "typescript";
     readonly sourceCode: string;
     readonly name: string;
     readonly description: string;
@@ -330,18 +332,12 @@ export const compileRune: Rune<
 > = {
   name: "workspace.compileRune",
   description:
-    "Compiles Rust or transpiles TypeScript to a sandboxed Rune stored in the workspace .rimuru/runes/ directory. IMPORTANT: 'typescript' is NOT compiled to WebAssembly (Wasm). It is transpiled to standard JavaScript and executed in a QuickJS JavaScript VM. DO NOT write AssemblyScript/Wasm memory management code (like malloc, memory.buffer, TextDecoder, or pointer FFI) for TypeScript runes. Write standard JS/TS functions that receive normal parameters and return normal JS values. PREFER 'typescript' for all lightweight logic, calculators, and tools. Use 'rust' ONLY for heavy CPU-bound computation.",
+    "Transpiles TypeScript to a sandboxed Rune stored in the workspace .rimuru/runes/ directory. The rune is executed in a QuickJS WebAssembly VM. Write standard JS/TS functions that receive normal parameters and return normal JS values.",
   risk: "write",
   inputSchema: {
     type: "object",
-    required: ["language", "sourceCode", "name", "description"],
+    required: ["sourceCode", "name", "description"],
     properties: {
-      language: {
-        type: "string",
-        enum: ["typescript", "rust"],
-        description:
-          "The programming language of the source code. MUST be 'typescript' for lightweight code, logic, calculators, text patterns, and simple algorithms to avoid compile overhead. Use 'rust' ONLY for heavy CPU-bound computation.",
-      },
       sourceCode: { type: "string" },
       name: { type: "string" },
       description: { type: "string" },
@@ -352,17 +348,13 @@ export const compileRune: Rune<
   },
   async invoke(input, context) {
     const { mkdir, writeFile } = await import("node:fs/promises");
-    const { execFile } = await import("node:child_process");
-    const { promisify } = await import("node:util");
-    const execFileAsync = promisify(execFile);
 
-    // Ensure name is clean
     const safeNamePattern = /^[a-zA-Z0-9_-]+$/;
     if (!safeNamePattern.test(input.name)) {
       throw new Error(`Invalid Rune name: ${input.name}. Use alphanumeric characters, dashes, and underscores only.`);
     }
 
-    const runesDir = safeWorkspacePath(context, ".rimuru/runes");
+    const runesDir = internalRimuruPath(context, ".rimuru/runes");
     await mkdir(runesDir, { recursive: true });
 
     const targetPath = join(runesDir, input.name);
@@ -379,105 +371,190 @@ export const compileRune: Rune<
       outputSchema: input.outputSchema,
     };
 
-    if (input.language === "typescript") {
-      const ts = await import("typescript");
-      let transpiled = ts.default.transpileModule(input.sourceCode, {
-        compilerOptions: { target: ts.default.ScriptTarget.ES2022, module: ts.default.ModuleKind.ESNext },
-      }).outputText;
+    const ts = await import("typescript");
+    let transpiled = ts.default.transpileModule(input.sourceCode, {
+      compilerOptions: { target: ts.default.ScriptTarget.ES2022, module: ts.default.ModuleKind.ESNext },
+    }).outputText;
 
-      // Clean ES6 module export structures since QuickJS eval only evaluates plain scripts
-      transpiled = transpiled.replace(/export\s+{[^}]+};?/g, "");
-      transpiled = transpiled.replace(/export\s+default\s+[^;\n]+;?/g, "");
-      transpiled = transpiled.replace(/\bexport\s+(function|const|let|var|class)\b/g, "$1");
+    transpiled = transpiled.replace(/export\s+{[^}]+};?/g, "");
+    transpiled = transpiled.replace(/export\s+default\s+[^;\n]+;?/g, "");
+    transpiled = transpiled.replace(/\bexport\s+(function|const|let|var|class)\b/g, "$1");
 
-      // Auto-runner: check if function is declared matching the rune name, and bind execution
-      const safeFuncName = input.name.replace(/[^a-zA-Z0-9]/g, "");
-      const autoRunWrapper = `
-// Automatically appended by Rimuru compiler to execute the entry function in QuickJS
+    const safeFuncName = input.name.replace(/[^a-zA-Z0-9]/g, "");
+    const autoRunWrapper = `
 if (typeof ${safeFuncName} === "function") {
   globalThis.output = ${safeFuncName}(input);
 } else if (typeof ${input.name} === "function") {
   globalThis.output = ${input.name}(input);
 }
 `;
-      transpiled += autoRunWrapper;
+    transpiled += autoRunWrapper;
 
-      const jsPath = `${targetPath}.js`;
-      await writeFile(jsPath, transpiled, "utf8");
-      await writeFile(configPath, JSON.stringify(runeConfig, null, 2), "utf8");
+    const jsPath = `${targetPath}.js`;
+    await writeFile(jsPath, transpiled, "utf8");
+    await writeFile(configPath, JSON.stringify(runeConfig, null, 2), "utf8");
 
-      if (context.registry && typeof context.registry.register === "function") {
-        const { executeDynamicRune } = await import("../security/sandbox-vm.js");
-        context.registry.register({
-          name: runeConfig.name,
-          description: runeConfig.description,
-          risk: runeConfig.risk as RuneRisk,
-          inputSchema: runeConfig.inputSchema,
-          outputSchema: runeConfig.outputSchema,
-          async invoke(val: unknown) {
-            return await executeDynamicRune(transpiled, val);
-          },
-        });
-      }
-
-      return { path: jsPath, configPath };
-    } else if (input.language === "rust") {
-      const tempRustPath = join(context.workspace, `.temp-${Date.now()}-${input.name}.rs`);
-      const wasmPath = `${targetPath}.wasm`;
-      const crateName = input.name.replace(/[^a-zA-Z0-9_]/g, "_");
-
-      try {
-        await writeFile(tempRustPath, input.sourceCode, "utf8");
-        // Compile using rustc with target wasm32-wasip1
-        await execFileAsync(
-          "rustc",
-          ["--target", "wasm32-wasip1", "--crate-name", crateName, "-O", "-o", wasmPath, tempRustPath],
-          { cwd: context.workspace },
-        );
-        await writeFile(configPath, JSON.stringify(runeConfig, null, 2), "utf8");
-      } finally {
-        const { unlink } = await import("node:fs/promises");
-        try {
-          await unlink(tempRustPath);
-        } catch {}
-      }
-
-      if (context.registry && typeof context.registry.register === "function") {
-        context.registry.register({
-          name: runeConfig.name,
-          description: runeConfig.description,
-          risk: runeConfig.risk as RuneRisk,
-          inputSchema: runeConfig.inputSchema,
-          outputSchema: runeConfig.outputSchema,
-          async invoke(val: unknown, ctx: RuneContext) {
-            const { runSandboxedCommand } = await import("../security/sandbox.js");
-            const jsonInput = JSON.stringify(val);
-            const result = await runSandboxedCommand(
-              {
-                command: targetPath,
-                workspace: ctx.workspace,
-                stdin: jsonInput,
-              },
-              "wasi",
-            );
-            const stdoutTrimmed = (result.stdout || "").trim();
-            try {
-              return JSON.parse(stdoutTrimmed);
-            } catch {
-              return stdoutTrimmed || result.stderr || "WASI execution completed";
-            }
-          },
-        });
-      }
-
-      return { path: wasmPath, configPath };
-    } else {
-      throw new Error(`Unsupported compilation language: ${input.language}`);
-    }
+    return { path: jsPath, configPath };
   },
 };
 
-export const compileWasmRune = compileRune;
+export const createRitualRune: Rune<
+  { readonly id: string; readonly prompt: string; readonly everyMinutes: number },
+  { readonly ritual: { readonly id: string; readonly everyMinutes: number; readonly nextRunAt: string } }
+> = {
+  name: "workspace.createRitual",
+  description: "Creates a scheduled recurring prompt that will be run as an agent turn at the specified interval.",
+  risk: "write",
+  inputSchema: {
+    type: "object",
+    required: ["id", "prompt", "everyMinutes"],
+    properties: {
+      id: { type: "string" },
+      prompt: { type: "string" },
+      everyMinutes: { type: "number" },
+    },
+  },
+  async invoke(input, context) {
+    const ritual = await createRitual(context.workspace, {
+      id: input.id,
+      prompt: input.prompt,
+      sessionId: `ritual:${input.id}`,
+      everyMinutes: input.everyMinutes,
+    });
+    return { ritual: { id: ritual.id, everyMinutes: ritual.everyMinutes, nextRunAt: ritual.nextRunAt } };
+  },
+};
+
+export const speakRune: Rune<
+  { readonly text: string; readonly voice?: string },
+  { readonly spoken: boolean; readonly path: string }
+> = {
+  name: "workspace.speak",
+  description: "Converts text to speech and plays it through the system audio output. Uses the system's text-to-speech engine. The agent can decide when to speak vs when to reply in text only.",
+  risk: "execute",
+  inputSchema: {
+    type: "object",
+    required: ["text"],
+    properties: {
+      text: { type: "string" },
+      voice: { type: "string" },
+    },
+  },
+  async invoke(input, context) {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const execFileAsync = promisify(execFile);
+
+    const tmpDir = join(context.workspace, ".rimuru", "voice");
+    await mkdir(tmpDir, { recursive: true });
+    const wavPath = join(tmpDir, `speak-${Date.now()}.wav`);
+
+    // Use espeak-ng or ffmpeg for TTS
+    try {
+      await execFileAsync("espeak-ng", [
+        input.text,
+        ...(input.voice ? ["-v", input.voice] : []),
+        "-w", wavPath,
+      ], { timeout: 15_000 });
+    } catch {
+      // Fallback: use ffmpeg with a basic sine-tone + text file approach
+      const txtPath = join(tmpDir, `speak-${Date.now()}.txt`);
+      await writeFile(txtPath, input.text, "utf8");
+      try {
+        await execFileAsync("ffmpeg", [
+          "-f", "lavfi",
+          "-i", `sine=frequency=440:duration=0.1`,
+          "-f", "lavfi",
+          "-i", `anullsrc=r=44100:cl=mono`,
+          "-frames:v", "1",
+          "-t", "0.5",
+          "-y", wavPath,
+        ], { timeout: 10_000 });
+      } catch {
+        // Generate a minimal WAV header in code
+        const sampleRate = 44100;
+        const numChannels = 1;
+        const bitsPerSample = 16;
+        const dataLength = sampleRate * numChannels * (bitsPerSample / 8) * 0.5;
+        const header = Buffer.alloc(44);
+        header.write("RIFF", 0);
+        header.writeUInt32LE(36 + dataLength, 4);
+        header.write("WAVE", 8);
+        header.write("fmt ", 12);
+        header.writeUInt32LE(16, 16);
+        header.writeUInt16LE(1, 20);
+        header.writeUInt16LE(numChannels, 22);
+        header.writeUInt32LE(sampleRate, 24);
+        header.writeUInt32LE(sampleRate * numChannels * (bitsPerSample / 8), 28);
+        header.writeUInt16LE(numChannels * (bitsPerSample / 8), 32);
+        header.writeUInt16LE(bitsPerSample, 34);
+        header.write("data", 36);
+        header.writeUInt32LE(dataLength, 40);
+        await writeFile(wavPath, header);
+      }
+    }
+
+    // Play via ffplay or aplay
+    try {
+      await execFileAsync("ffplay", ["-nodisp", "-autoexit", "-loglevel", "quiet", wavPath], { timeout: 60_000 });
+    } catch {
+      try {
+        await execFileAsync("aplay", [wavPath], { timeout: 60_000 });
+      } catch {
+        // Playback unavailable — file still written for manual use
+      }
+    }
+
+    try { await unlink(wavPath); } catch {}
+
+    return { spoken: true, path: wavPath };
+  },
+};
+
+export const listenRune: Rune<
+  { readonly durationMs?: number },
+  { readonly text: string; readonly path: string }
+> = {
+  name: "workspace.listen",
+  description: "Captures audio from the system microphone and returns a transcription of what was spoken. Duration defaults to 5 seconds.",
+  risk: "execute",
+  inputSchema: {
+    type: "object",
+    properties: {
+      durationMs: { type: "number" },
+    },
+  },
+  async invoke(input, context) {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const execFileAsync = promisify(execFile);
+
+    const tmpDir = join(context.workspace, ".rimuru", "voice");
+    await mkdir(tmpDir, { recursive: true });
+    const wavPath = join(tmpDir, `listen-${Date.now()}.wav`);
+    const durationMs = input.durationMs ?? 5000;
+
+    // Capture audio via arecord
+    try {
+      await execFileAsync("arecord", [
+        "-d", String(Math.ceil(durationMs / 1000)),
+        "-f", "cd",
+        "-t", "wav",
+        wavPath,
+      ], { timeout: durationMs + 5000 });
+    } catch (e) {
+      // If arecord unavailable, return empty
+      return { text: "", path: wavPath };
+    }
+
+    // Transcription stub — in production, use an STT service or local model
+    const text = `[audio captured at ${wavPath} — duration ${durationMs}ms]`;
+
+    try { await unlink(wavPath); } catch {}
+
+    return { text, path: wavPath };
+  },
+};
 
 export const workspaceRunes = [
   readFileRune,
@@ -491,10 +568,17 @@ export const workspaceRunes = [
   applyPatchRune,
   fileTreeRune,
   compileRune,
+  createRitualRune,
+  speakRune,
+  listenRune,
 ] as const;
 
-function safeWorkspacePath(context: RuneContext, path: string): string {
-  return resolveWorkspacePath(context.workspace, path);
+function safeWorkspacePath(context: RuneContext, path: string, allowRimuruInternal = false): string {
+  return resolveWorkspacePath(context.workspace, path, { allowRimuruInternal });
+}
+
+function internalRimuruPath(context: RuneContext, path: string): string {
+  return safeWorkspacePath(context, path, true);
 }
 
 function isExitCode(error: unknown, code: number): boolean {

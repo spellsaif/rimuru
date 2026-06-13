@@ -1,6 +1,6 @@
-import { mkdir, cp, rm } from "node:fs/promises";
-import { join } from "node:path";
 import { existsSync } from "node:fs";
+import { cp, mkdir, rm } from "node:fs/promises";
+import { join } from "node:path";
 
 async function prebuild() {
   const publicDir = join(process.cwd(), "public");

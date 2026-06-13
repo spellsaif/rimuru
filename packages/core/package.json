@@ -17,6 +17,7 @@
     "quickjs-emscripten": "^0.32.0",
     "typescript": "latest",
     "whatsapp-web.js": "^1.34.7",
+    "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

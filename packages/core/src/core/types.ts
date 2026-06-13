@@ -59,6 +59,7 @@ export type Flow =
   | { readonly type: "provider.responded"; readonly provider: string; readonly at: Date }
   | { readonly type: "rune.requested"; readonly rune: string; readonly at: Date }
   | { readonly type: "rune.completed"; readonly rune: string; readonly at: Date }
+  | { readonly type: "rune.failed"; readonly rune: string; readonly error: string; readonly at: Date }
   | { readonly type: "rune.denied"; readonly rune: string; readonly reason: string; readonly at: Date }
   | { readonly type: "memory.saved"; readonly count: number; readonly at: Date }
   | { readonly type: "thought.emitted"; readonly thought: string; readonly at: Date }
@@ -108,9 +109,31 @@ export interface Rune<Input = unknown, Output = unknown> {
   readonly inputSchema?: RuneSchema;
   readonly outputSchema?: RuneSchema;
   invoke(input: Input, context: RuneContext): Promise<Output>;
-  invokeStream?(input: Input, context: RuneContext): AsyncIterable<unknown>;
-  onRegister?(registry: any): Promise<void> | void;
-  onDeregister?(registry: any): Promise<void> | void;
+}
+
+export interface RuneInvocation {
+  readonly name: string;
+  readonly risk: RuneRisk;
+  readonly input: unknown;
+  context: RuneContext;
+}
+
+export interface RuneMiddleware {
+  (invocation: RuneInvocation, next: () => Promise<unknown>): Promise<unknown>;
+}
+
+export interface PluginHooks {
+  onBeforeInvoke?(invocation: RuneInvocation): Promise<RuneInvocation | void>;
+  onAfterInvoke?(invocation: RuneInvocation, output: unknown): Promise<void>;
+  onInvokeError?(invocation: RuneInvocation, error: Error): Promise<void>;
+}
+
+export interface AgentProfile {
+  readonly name: string;
+  readonly soul?: string;
+  readonly allowedRisks: readonly RuneRisk[];
+  readonly defaultModel?: string;
+  readonly defaultProvider?: string;
 }
 
 export interface RuneSchema {
@@ -136,6 +159,8 @@ export interface RuneContext {
   readonly audit?: boolean;
   readonly signal?: AbortSignal;
   readonly registry?: any;
+  readonly sovereign?: any;
+  readonly chronicle?: any;
   readonly state?: Record<string, unknown>;
   getSecret?(name: string): Promise<string | undefined>;
 }

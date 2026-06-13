@@ -114,6 +114,8 @@ interface SerializedMessage {
   readonly role: Message["role"];
   readonly content: string;
   readonly name?: string;
+  readonly toolCalls?: readonly { readonly id: string; readonly name: string; readonly arguments: Record<string, unknown> }[];
+  readonly toolCallId?: string;
   readonly createdAt: string;
 }
 
@@ -122,6 +124,8 @@ function serializeMessage(message: Message): SerializedMessage {
     role: message.role,
     content: message.content,
     ...(message.name === undefined ? {} : { name: message.name }),
+    ...(message.toolCalls ? { toolCalls: message.toolCalls.map((tc) => ({ id: tc.id, name: tc.name, arguments: tc.arguments })) } : {}),
+    ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
     createdAt: message.createdAt.toISOString(),
   };
 }
@@ -131,6 +135,8 @@ function deserializeMessage(message: SerializedMessage): Message {
     role: message.role,
     content: message.content,
     ...(message.name === undefined ? {} : { name: message.name }),
+    ...(message.toolCalls ? { toolCalls: message.toolCalls } : {}),
+    ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
     createdAt: new Date(message.createdAt),
   };
 }

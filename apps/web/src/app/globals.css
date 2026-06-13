@@ -12,6 +12,7 @@
 :root {
   --background: #050505;
   --foreground: #ffffff;
+  --font-inter: Inter, ui-sans-serif, system-ui, sans-serif;
 }
 
 body {

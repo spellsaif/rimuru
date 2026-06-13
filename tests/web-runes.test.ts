@@ -1,8 +1,8 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { describe, expect, it, vi, afterEach } from "vitest";
-import { fileTreeRune, webSearchRune, webFetchUrlRune } from "../src/index.js";
+import { join } from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { fileTreeRune, webFetchUrlRune, webSearchRune } from "../src/index.js";
 
 describe("Workspace fileTree & Web Runes", () => {
   afterEach(() => {
@@ -122,5 +122,15 @@ describe("Workspace fileTree & Web Runes", () => {
     expect(result.content).toContain("Another paragraph here.");
     expect(result.content).not.toContain("color: red");
     expect(result.content).not.toContain("console.log");
+  });
+
+  it("web.fetchUrl rejects private or local URLs before fetching", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await expect(
+      webFetchUrlRune.invoke({ url: "http://127.0.0.1:19710/vault" }, { workspace: "/tmp", sessionId: "s" }),
+    ).rejects.toThrow("Unsafe URL");
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

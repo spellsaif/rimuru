@@ -1,9 +1,9 @@
 import type { FlowBus } from "../core/events.js";
 import type { RuneRegistry } from "../core/runes.js";
 import type { Sovereign } from "../core/sovereign.js";
-import type { Chronicle, Message, RunResult } from "../core/types.js";
+import type { Chronicle, RunResult } from "../core/types.js";
 import { type Plan, planObjective } from "../planner/planner.js";
-import { createWorkspaceBranch, deleteWorkspaceBranch, mergeWorkspaceBranch } from "../security/branch.js";
+import { createWorkspaceBranch } from "../security/branch.js";
 
 export interface AgentObservation {
   readonly step: number;
@@ -34,10 +34,6 @@ export class AgentLoop {
     },
   ) {}
 
-  /**
-   * Spawns a speculative execution branch in a parallel workspace timeline.
-   * Copies parent chronicle history to the child session, runs the loop on a workspace branch, and returns the result.
-   */
   async speculate(objective: string, childSessionId: string): Promise<AgentRunResult> {
     const branchDir = await createWorkspaceBranch(this.options.workspace, childSessionId);
     if (this.options.chronicle) {
@@ -58,9 +54,6 @@ export class AgentLoop {
     return await childLoop.run(objective);
   }
 
-  /**
-   * Runs a dynamic ReAct (Reason+Act) loop to solve the objective.
-   */
   async run(objective: string, onText?: (text: string) => void): Promise<AgentRunResult> {
     const observations: AgentObservation[] = [];
     const maxSteps = this.options.maxSteps ?? 10;
@@ -68,13 +61,20 @@ export class AgentLoop {
       .describe()
       .map((r) => ({ name: r.name, description: r.description, inputSchema: r.inputSchema }));
 
-    let currentStatus = "working";
+    const chronicle = this.options.chronicle;
+    if (chronicle && typeof (chronicle as any).compact === "function") {
+      const messages = await chronicle.load(this.options.sessionId);
+      const estimatedTokens = messages.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0);
+      if (estimatedTokens > 80_000) {
+        await (chronicle as any).compact(this.options.sessionId);
+      }
+    }
 
     let lastToolCall: { id: string; name: string } | undefined;
     let lastTurn: RunResult | undefined;
 
     for (let step = 1; step <= maxSteps; step++) {
-      const parser = onText ? new ReActStreamParser((text) => process.stdout.write(text)) : undefined;
+      const parser = onText ? new ReActStreamParser(onText) : undefined;
       const turnRequest: any = {
         workspace: this.options.workspace,
         sessionId: this.options.sessionId,
@@ -144,7 +144,6 @@ export class AgentLoop {
       }
 
       if (thoughtProcess.type === "finish") {
-        currentStatus = "finished";
         break;
       }
 
@@ -152,32 +151,16 @@ export class AgentLoop {
       let output: unknown;
       let error: string | undefined;
 
-      const runeMeta = this.options.runes.describe().find((r) => r.name === rune);
-      const isMutative = runeMeta && (runeMeta.risk === "write" || runeMeta.risk === "execute");
-
       try {
         if (!rune) throw new Error("No rune specified in action");
 
-        if (isMutative) {
-          const branchId = `${this.options.sessionId}-step-${step}`;
-          const branchDir = await createWorkspaceBranch(this.options.workspace, branchId);
-          try {
-            output = await this.options.runes.invoke(rune, input, {
-              workspace: branchDir,
-              sessionId: this.options.sessionId,
-              audit: this.options.audit ?? true,
-            });
-            await mergeWorkspaceBranch(this.options.workspace, branchId);
-          } finally {
-            await deleteWorkspaceBranch(this.options.workspace, branchId);
-          }
-        } else {
-          output = await this.options.runes.invoke(rune, input, {
-            workspace: this.options.workspace,
-            sessionId: this.options.sessionId,
-            audit: this.options.audit ?? true,
-          });
-        }
+        output = await this.options.runes.invoke(rune, input, {
+          workspace: this.options.workspace,
+          sessionId: this.options.sessionId,
+          audit: this.options.audit ?? true,
+          sovereign: this.options.sovereign,
+          chronicle: this.options.chronicle,
+        });
       } catch (e) {
         error = e instanceof Error ? e.message : String(e);
       }
@@ -199,7 +182,6 @@ export class AgentLoop {
 
     const plan = planObjective(objective);
 
-    // Final synthesis
     let final: RunResult;
     if (observations.length === 0 && lastTurn) {
       final = lastTurn;
@@ -253,8 +235,6 @@ function parseAction(
     }
   }
 
-  // Fallback: If no Action header is present but we have response content,
-  // treat it as the final answer/finish.
   if (content && !content.includes("Action:")) {
     return { type: "finish", thought: content };
   }

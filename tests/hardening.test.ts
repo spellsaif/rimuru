@@ -82,6 +82,13 @@ describe("sandboxing", () => {
     }
   });
 
+  it("allows workspace root but blocks hidden Rimuru state from workspace runes", () => {
+    expect(resolveWorkspacePath("/tmp/work", ".")).toBe("/tmp/work");
+    expect(() => resolveWorkspacePath("/tmp/work", ".rimuru/audit.jsonl")).toThrow(
+      "Access to sensitive Sovereign internal path denied",
+    );
+  });
+
   it("validates formatter command in applyUnifiedPatch", async () => {
     const patch = `--- /dev/null
 +++ b/file.txt

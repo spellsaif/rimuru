@@ -1,24 +1,26 @@
 import { createHash } from "node:crypto";
-import { resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import { AgentLoop, type AgentRunResult } from "../agent/agent.js";
 import type { RuntimeConfig } from "../config/runtime-config.js";
 import { JsonChronicle } from "../core/chronicle.js";
 import { FlowBus } from "../core/events.js";
+import { auditMiddleware, isolationMiddleware, permissionMiddleware } from "../core/middleware.js";
 import { ApprovalPermissionPolicy, StaticPermissionPolicy } from "../core/permissions.js";
 import { RuneRegistry, workspaceRune } from "../core/runes.js";
 import { Sovereign } from "../core/sovereign.js";
 import { JsonTraceStore } from "../core/trace.js";
-import type { PermissionDecision, PermissionRequest, RunResult, RuneRisk } from "../core/types.js";
+import type { PermissionDecision, PermissionRequest, RunResult, RuneMiddleware, RuneRisk } from "../core/types.js";
 import { createSemanticMemory, semanticMemoryRunes } from "../memory/semantic.js";
 import { registerPlugins } from "../plugins/manifest.js";
 import { createShard } from "../providers/factory.js";
 import { sendMessageRune } from "../runes/circle.js";
 import { gitRunes } from "../runes/git.js";
 import { workspaceRunes } from "../runes/workspace.js";
-import { discoverSandboxedRunes, discoverWorkspaceRunes, loadSoul } from "./discovery.js";
+import { discoverSandboxedRunes, loadSoul } from "./discovery.js";
 export { discoverSandboxedRunes };
 import { vesselsRunes } from "../runes/vessels-rune.js";
 import { webRunes } from "../runes/web.js";
+import { runDueRituals } from "../rituals/rituals.js";
 
 export interface RuntimePaths {
   readonly workspace: string;
@@ -124,14 +126,20 @@ export async function createRuntimeRuneRegistry(options: {
   readonly approvalPrompt?: (request: PermissionRequest) => Promise<PermissionDecision>;
 }): Promise<RuneRegistry> {
   const staticPolicy = new StaticPermissionPolicy({ allow: options.allowedRisks });
-  const registry = new RuneRegistry({
-    policy:
-      options.approvals && options.approvalPrompt
-        ? new ApprovalPermissionPolicy({ fallback: staticPolicy, prompt: options.approvalPrompt })
-        : staticPolicy,
-    emit: (event) => options.flowBus?.emit(event),
-    flowBus: options.flowBus,
-  });
+  const policy = options.approvals && options.approvalPrompt
+    ? new ApprovalPermissionPolicy({ fallback: staticPolicy, prompt: options.approvalPrompt })
+    : staticPolicy;
+  const emit = (event: any) => options.flowBus?.emit(event);
+  const clock = () => new Date();
+
+  const middlewares: RuneMiddleware[] = [
+    auditMiddleware({ emit, clock }),
+    permissionMiddleware({ policy, emit, clock }),
+    isolationMiddleware(),
+  ];
+
+  const registry = new RuneRegistry({ middlewares });
+
   registry.register(workspaceRune);
   registry.register(sendMessageRune);
   for (const workspaceRuneItem of workspaceRunes) registry.register(workspaceRuneItem);
@@ -140,11 +148,43 @@ export async function createRuntimeRuneRegistry(options: {
   for (const webRune of webRunes) registry.register(webRune);
   for (const memoryRune of semanticMemoryRunes(createSemanticMemory(resolve(options.workspace, ".rimuru"))))
     registry.register(memoryRune);
-  for (const workspaceSkill of await discoverWorkspaceRunes(options.workspace)) registry.register(workspaceSkill);
   for (const sandboxedRune of await discoverSandboxedRunes(options.workspace)) registry.register(sandboxedRune);
   await registerPlugins(registry, resolve(options.workspace, ".rimuru", "plugins"));
 
   return registry;
+}
+
+export async function runAgentTurn(options: AgentTurnOptions): Promise<AgentRunResult> {
+  const sessionId = options.sessionId ?? options.config.sessionId;
+  const runtime = await createRuntime({
+    config: options.config,
+    workspace: options.workspace,
+    systemPrompt: options.systemPrompt,
+    ...(options.flowBus ? { flowBus: options.flowBus } : {}),
+    ...(options.approvals === undefined ? {} : { approvals: options.approvals }),
+    ...(options.approvalPrompt ? { approvalPrompt: options.approvalPrompt } : {}),
+  });
+
+  const loop = new AgentLoop({
+    sovereign: runtime.sovereign,
+    runes: runtime.runes,
+    workspace: options.workspace,
+    sessionId,
+    audit: true,
+    flowBus: options.flowBus,
+    chronicle: runtime.chronicle,
+  });
+
+  const result = await loop.run(options.objective, options.onText);
+  await createSemanticMemory(runtime.paths.rimuruDir).indexChronicle(sessionId, runtime.chronicle);
+  if (options.trace)
+    await runtime.traceStore.save({
+      sessionId,
+      createdAt: new Date(),
+      messages: result.final.transcript,
+      events: result.final.events,
+    });
+  return result;
 }
 
 export async function runChatTurn(options: ChatTurnOptions): Promise<RunResult> {
@@ -179,43 +219,11 @@ export async function runChatTurn(options: ChatTurnOptions): Promise<RunResult> 
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
-export async function runAgentTurn(options: AgentTurnOptions): Promise<AgentRunResult> {
-  const sessionId = options.sessionId ?? options.config.sessionId;
-  const runtime = await createRuntime({
-    config: options.config,
-    workspace: options.workspace,
-    systemPrompt: options.systemPrompt,
-    ...(options.flowBus ? { flowBus: options.flowBus } : {}),
-    ...(options.approvals === undefined ? {} : { approvals: options.approvals }),
-    ...(options.approvalPrompt ? { approvalPrompt: options.approvalPrompt } : {}),
-  });
-  const loop = new AgentLoop({
-    sovereign: runtime.sovereign,
-    runes: runtime.runes,
-    workspace: options.workspace,
-    sessionId,
-    audit: true,
-    flowBus: options.flowBus,
-    chronicle: runtime.chronicle,
-  });
-
-  const result = await loop.run(options.objective, options.onText);
-  await createSemanticMemory(runtime.paths.rimuruDir).indexChronicle(sessionId, runtime.chronicle);
-  if (options.trace)
-    await runtime.traceStore.save({
-      sessionId,
-      createdAt: new Date(),
-      messages: result.final.transcript,
-      events: result.final.events,
-    });
-  return result;
-}
-
 export function runtimePaths(config: RuntimeConfig, workspace: string): RuntimePaths {
   const rimuruDir = resolve(workspace, ".rimuru");
   return {
     workspace,
-    memoryDir: resolve(config.memoryDir),
+    memoryDir: isAbsolute(config.memoryDir) ? resolve(config.memoryDir) : resolve(workspace, config.memoryDir),
     rimuruDir,
     traceDir: resolve(rimuruDir, "traces"),
     pluginDir: resolve(rimuruDir, "plugins"),

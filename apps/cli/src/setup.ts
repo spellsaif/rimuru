@@ -1,15 +1,12 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import * as p from "@clack/prompts";
 import chalk from "chalk";
 import {
   type CircleConfig,
   type ProviderKind,
   FlowBus,
-  JsonChronicle,
-  JsonTraceStore,
-  Sovereign,
-  createShard,
+  createRuntime,
   loadRuntimeConfig,
   writeSystemdUserService,
 } from "@rimuru/core";
@@ -296,13 +293,14 @@ export async function setupWorkspaceInteractive(
     process.stdout.write(ansi.clear);
     const config = await loadRuntimeConfig({ workspace: options.workspace });
     const flowBus = new FlowBus();
-    const chronicle = new JsonChronicle(resolve(config.memoryDir));
+    const runtime = await createRuntime({ config, workspace: options.workspace, flowBus });
 
     await runInteractiveTui({
-      sovereign: new Sovereign({ shard: createShard(config), chronicle, flowBus }),
+      sovereign: runtime.sovereign,
+      runes: runtime.runes,
       flowBus,
-      chronicle,
-      traceStore: new JsonTraceStore(resolve(options.workspace, ".rimuru", "traces")),
+      chronicle: runtime.chronicle,
+      traceStore: runtime.traceStore,
       workspace: options.workspace,
       sessionId: config.sessionId,
       provider: config.provider,

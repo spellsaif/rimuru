@@ -14,7 +14,8 @@
     "paths": {
       "@rimuru/core": ["./packages/core/src/index.ts"],
       "@rimuru/gate": ["./packages/gate/src/index.ts"],
-      "@rimuru/vault": ["./packages/vault/src/vault.ts"]
+      "@rimuru/vault": ["./packages/vault/src/vault.ts"],
+      "@rimuru/voice": ["./packages/voice/dist/index.d.ts"]
     }
   }
 }

@@ -27,6 +27,7 @@ export {
 export { JsonTraceStore } from "./core/trace.js";
 export { AgentLoop, ReActStreamParser } from "./agent/agent.js";
 export { RuneRegistry, workspaceRune } from "./core/runes.js";
+export { auditMiddleware, isolationMiddleware, permissionMiddleware, skillMiddleware, stagingMiddleware, learningMiddleware } from "./core/middleware.js";
 export { Sovereign } from "./core/sovereign.js";
 export { loadRuntimeConfig } from "./config/runtime-config.js";
 export { validateRuntimeConfig } from "./config/validate.js";
@@ -39,7 +40,7 @@ export {
   runtimePaths,
   discoverSandboxedRunes,
 } from "./runtime/runtime.js";
-export { createShard } from "./providers/factory.js";
+export { createShard, registerShardAdapter, listShardKinds } from "./providers/factory.js";
 // Gate logic moved to @rimuru/gate
 
 // Providers
@@ -58,7 +59,9 @@ export {
   workspaceRunes,
   fileTreeRune,
   compileRune,
-  compileWasmRune,
+  createRitualRune,
+  speakRune,
+  listenRune,
 } from "./runes/workspace.js";
 export { webSearchRune, webFetchUrlRune, webRunes } from "./runes/web.js";
 export { sendMessageRune } from "./runes/circle.js";
@@ -78,7 +81,7 @@ export { renderSystemdUserService, writeSystemdUserService } from "./service/ser
 export { deleteVaultSecret, getVaultSecret, listVaultSecrets, setVaultSecret } from "@rimuru/vault";
 
 export { activeVessel, listVessels } from "./vessels/vessels.js";
-export { spawnVesselRune, delegateVesselRune, vesselsRunes } from "./runes/vessels-rune.js";
+export { spawnVesselRune, delegateVesselRune, speculateRune, vesselsRunes } from "./runes/vessels-rune.js";
 export {
   discoverPluginManifests,
   loadPlugin,
@@ -97,7 +100,7 @@ export {
   SemanticMemory,
   semanticMemoryRunes,
 } from "./memory/semantic.js";
-export { handleMcpCall } from "./mcp/bridge.js";
+export { handleMcpCall, discoverMcpRunes } from "./mcp/bridge.js";
 export { serveMcpStdio } from "./mcp/server.js";
 // TUI logic moved to @rimuru/cli
 
@@ -105,7 +108,9 @@ export { redactSecrets } from "./security/redact.js";
 export { assertCommandName, resolveWorkspacePath } from "./security/workspace.js";
 export { runSandboxedCommand, sandboxModeFromEnv } from "./security/sandbox.js";
 export { executeDynamicRune } from "./security/sandbox-vm.js";
+export { isSafeExternalHttpUrl, readResponseTextWithLimit } from "./security/url.js";
 export { createWorkspaceBranch, deleteWorkspaceBranch, mergeWorkspaceBranch } from "./security/branch.js";
+export { exportTrajectory, exportRunResult, exportTrajectoryFromSessions } from "./training/exporter.js";
 // Dashboard logic moved to @rimuru/cli
 
 export type {
@@ -142,8 +147,13 @@ export type { AuditEvent, AuditEventType, NewAuditEvent } from "./core/audit.js"
 export type { AgentRunResult } from "./agent/agent.js";
 export type { WorkspaceIndex, IndexedFile } from "./indexer/lexical-index.js";
 export type { EmbeddingProvider, SemanticMemoryRecord, SemanticMemorySearchResult } from "./memory/semantic.js";
-export type { McpToolCall } from "./mcp/bridge.js";
+export type { McpToolCall, McpServerConfig } from "./mcp/bridge.js";
 export type { McpServerOptions } from "./mcp/server.js";
 export type { ApplyPatchOptions, PatchApplyResult, PatchFile, PatchHunk, PatchLine } from "./edit/patch.js";
 export type { SandboxCommandInput, SandboxMode } from "./security/sandbox.js";
+export type { ShareGPTTrajectory, ShareGPTMessage } from "./training/exporter.js";
+export { SkillRegistry } from "./skills/registry.js";
+export type { Skill } from "./skills/registry.js";
+export type { StagingEntry, StagingStore } from "./core/middleware.js";
+export type { JsonSchemaType, JsonSchemaField, JsonSchemaObject } from "./core/schema.js";
 export type * from "./core/types.js";

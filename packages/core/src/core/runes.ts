@@ -1,67 +1,85 @@
 import { z } from "zod";
-import { appendAuditEvent } from "./audit.js";
-import type { Flow } from "./types.js";
-import type { PermissionPolicy, Rune, RuneContext, RuneSchema } from "./types.js";
+import type { Rune, RuneContext, RuneInvocation, RuneMiddleware, RuneRisk } from "./types.js";
+import { jsonSchemaToZod } from "./schema.js";
+
+export interface RuneEntry {
+  readonly rune: Rune;
+  readonly zodInput?: z.ZodType<any>;
+  readonly zodOutput?: z.ZodType<any>;
+}
 
 export interface RuneRegistryOptions {
-  readonly policy?: PermissionPolicy;
-  readonly emit?: (event: Flow) => void;
-  readonly clock?: () => Date;
-  readonly flowBus?: any;
+  readonly middlewares?: readonly RuneMiddleware[];
 }
 
 export class RuneRegistry {
-  readonly flowBus?: any;
-  readonly #runes = new Map<string, Rune>();
-  readonly #policy: PermissionPolicy | undefined;
-  readonly #emit: ((event: Flow) => void) | undefined;
-  readonly #clock: () => Date;
+  middlewares: RuneMiddleware[];
+  readonly #entries = new Map<string, RuneEntry>();
+  readonly #toolsets = new Map<string, Set<string>>();
+  #enabledToolsets = new Set<string>();
 
   constructor(options: RuneRegistryOptions = {}) {
-    this.flowBus = options.flowBus;
-    this.#policy = options.policy;
-    this.#emit = options.emit;
-    this.#clock = options.clock ?? (() => new Date());
+    this.middlewares = [...(options.middlewares ?? [])];
   }
 
   register(rune: Rune): void {
     const lowerName = rune.name.toLowerCase();
-    if (this.#runes.has(lowerName)) {
+    if (this.#entries.has(lowerName)) {
       throw new Error(`Rune already registered: ${rune.name}`);
     }
-    this.#runes.set(lowerName, rune);
-    if (rune.onRegister) {
-      Promise.resolve(rune.onRegister(this)).catch((error) => {
-        console.error(`[runes] Error running onRegister hook for ${rune.name}:`, error);
-      });
-    }
+    this.#entries.set(lowerName, {
+      rune,
+      zodInput: jsonSchemaToZod(rune.inputSchema),
+      zodOutput: jsonSchemaToZod(rune.outputSchema),
+    });
   }
 
   deregister(name: string): void {
-    const lowerName = name.toLowerCase();
-    const rune = this.#runes.get(lowerName);
-    if (rune) {
-      this.#runes.delete(lowerName);
-      if (rune.onDeregister) {
-        Promise.resolve(rune.onDeregister(this)).catch((error) => {
-          console.error(`[runes] Error running onDeregister hook for ${rune.name}:`, error);
-        });
-      }
-    }
+    this.#entries.delete(name.toLowerCase());
+  }
+
+  toolset(name: string, runeNames: readonly string[]): void {
+    this.#toolsets.set(name, new Set(runeNames.map((n) => n.toLowerCase())));
+  }
+
+  enableToolset(name: string): void {
+    this.#enabledToolsets.add(name);
+  }
+
+  disableToolset(name: string): void {
+    this.#enabledToolsets.delete(name);
+  }
+
+  getEnabledToolsets(): readonly string[] {
+    return [...this.#enabledToolsets];
   }
 
   list(): readonly Rune[] {
-    return [...this.#runes.values()].sort((a, b) => a.name.localeCompare(b.name));
+    return [...this.#entries.values()].map((e) => e.rune).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  byRisk(risk: RuneRisk): readonly Rune[] {
+    return this.list().filter((r) => r.risk === risk);
   }
 
   describe(): readonly {
     readonly name: string;
     readonly description: string;
     readonly risk: string;
-    readonly inputSchema?: RuneSchema;
-    readonly outputSchema?: RuneSchema;
+    readonly inputSchema?: any;
+    readonly outputSchema?: any;
   }[] {
-    return this.list().map((rune) => ({
+    let runes = this.list();
+    if (this.#enabledToolsets.size > 0) {
+      const allowed = new Set<string>();
+      for (const ts of this.#enabledToolsets) {
+        for (const name of this.#toolsets.get(ts) ?? []) {
+          allowed.add(name);
+        }
+      }
+      runes = runes.filter((r) => allowed.has(r.name.toLowerCase()));
+    }
+    return runes.map((rune) => ({
       name: rune.name,
       description: rune.description,
       risk: rune.risk,
@@ -71,136 +89,45 @@ export class RuneRegistry {
   }
 
   async invoke(name: string, input: unknown, context: RuneContext): Promise<unknown> {
-    const rune = this.#runes.get(name.toLowerCase());
-    if (!rune) throw new Error(`Unknown rune: ${name}`);
-    validateSchema(rune.inputSchema, input, `Rune input invalid: ${name}`);
-    this.#emit?.({ type: "rune.requested", rune: name, at: this.#clock() });
-    await audit(context, { type: "rune.requested", sessionId: context.sessionId, rune: name, risk: rune.risk, input });
-    const decision = await this.#policy?.decide({
-      rune: rune.name,
-      risk: rune.risk,
+    const entry = this.#entries.get(name.toLowerCase());
+    if (!entry) throw new Error(`Unknown rune: ${name}`);
+
+    validateWithZod(entry.zodInput, input, `Rune input invalid: ${name}`);
+
+    const invocation: RuneInvocation = {
+      name: entry.rune.name,
+      risk: entry.rune.risk,
       input,
-      workspace: context.workspace,
-      sessionId: context.sessionId,
-    });
-    if (decision && !decision.allowed) {
-      this.#emit?.({ type: "rune.denied", rune: name, reason: decision.reason, at: this.#clock() });
-      await audit(context, {
-        type: "rune.denied",
-        sessionId: context.sessionId,
-        rune: name,
-        risk: rune.risk,
-        input,
-        reason: decision.reason,
-      });
-      throw new Error(`Rune denied: ${name}: ${decision.reason}`);
-    }
-    await audit(context, {
-      type: "rune.allowed",
-      sessionId: context.sessionId,
-      rune: name,
-      risk: rune.risk,
-      input,
-      reason: decision?.reason ?? "no policy configured",
-    });
-    try {
-      const state = context.state ?? {};
+      context: { ...context },
+    };
+
+    const output = await runMiddlewareChain(invocation, this.middlewares, async () => {
       const enrichedContext: RuneContext = {
-        ...context,
+        ...invocation.context,
         registry: this,
-        state,
+        state: invocation.context.state ?? {},
       };
-      const output = await rune.invoke(input, enrichedContext);
-      validateSchema(rune.outputSchema, output, `Rune output invalid: ${name}`);
-      this.#emit?.({ type: "rune.completed", rune: name, at: this.#clock() });
-      await audit(context, {
-        type: "rune.completed",
-        sessionId: context.sessionId,
-        rune: name,
-        risk: rune.risk,
-        output,
-      });
-      return output;
-    } catch (error) {
-      await audit(context, {
-        type: "rune.failed",
-        sessionId: context.sessionId,
-        rune: name,
-        risk: rune.risk,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+      const result = await entry.rune.invoke(invocation.input, enrichedContext);
+      validateWithZod(entry.zodOutput, result, `Rune output invalid: ${name}`);
+      return result;
+    });
+
+    return output;
   }
 
   async *invokeStream(name: string, input: unknown, context: RuneContext): AsyncIterable<unknown> {
-    const rune = this.#runes.get(name.toLowerCase());
-    if (!rune) throw new Error(`Unknown rune: ${name}`);
-    validateSchema(rune.inputSchema, input, `Rune input invalid: ${name}`);
-    this.#emit?.({ type: "rune.requested", rune: name, at: this.#clock() });
-    await audit(context, { type: "rune.requested", sessionId: context.sessionId, rune: name, risk: rune.risk, input });
-    const decision = await this.#policy?.decide({
-      rune: rune.name,
-      risk: rune.risk,
-      input,
-      workspace: context.workspace,
-      sessionId: context.sessionId,
-    });
-    if (decision && !decision.allowed) {
-      this.#emit?.({ type: "rune.denied", rune: name, reason: decision.reason, at: this.#clock() });
-      await audit(context, {
-        type: "rune.denied",
-        sessionId: context.sessionId,
-        rune: name,
-        risk: rune.risk,
-        input,
-        reason: decision.reason,
-      });
-      throw new Error(`Rune denied: ${name}: ${decision.reason}`);
-    }
-    await audit(context, {
-      type: "rune.allowed",
-      sessionId: context.sessionId,
-      rune: name,
-      risk: rune.risk,
-      input,
-      reason: decision?.reason ?? "no policy configured",
-    });
-    try {
-      const state = context.state ?? {};
-      const enrichedContext: RuneContext = {
-        ...context,
-        registry: this,
-        state,
-      };
-      if (rune.invokeStream) {
-        for await (const chunk of rune.invokeStream(input, enrichedContext)) {
-          yield chunk;
-        }
-      } else {
-        const output = await rune.invoke(input, enrichedContext);
-        validateSchema(rune.outputSchema, output, `Rune output invalid: ${name}`);
-        yield output;
-      }
-      this.#emit?.({ type: "rune.completed", rune: name, at: this.#clock() });
-      await audit(context, {
-        type: "rune.completed",
-        sessionId: context.sessionId,
-        rune: name,
-        risk: rune.risk,
-        output: "stream completed",
-      });
-    } catch (error) {
-      await audit(context, {
-        type: "rune.failed",
-        sessionId: context.sessionId,
-        rune: name,
-        risk: rune.risk,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    yield this.invoke(name, input, context);
   }
+}
+
+async function runMiddlewareChain(
+  invocation: RuneInvocation,
+  middlewares: readonly RuneMiddleware[],
+  handler: () => Promise<unknown>,
+): Promise<unknown> {
+  if (middlewares.length === 0) return handler();
+  const [first, ...rest] = middlewares;
+  return first(invocation, () => runMiddlewareChain(invocation, rest, handler));
 }
 
 export const workspaceRune: Rune<{ readonly question: string }, { readonly answer: string }> = {
@@ -216,42 +143,12 @@ export const workspaceRune: Rune<{ readonly question: string }, { readonly answe
   },
 };
 
-function buildZodSchema(schema: any): z.ZodType<any> {
-  if (!schema) return z.any();
-  if (schema.type === "array") {
-    return z.array(z.any());
-  } else if (schema.type === "boolean") {
-    return z.boolean();
-  } else if (schema.type === "number") {
-    return z.number();
-  } else if (schema.type === "string") {
-    return z.string();
-  } else if (schema.type === "object") {
-    const shape: Record<string, z.ZodType<any>> = {};
-    for (const [key, prop] of Object.entries(schema.properties ?? {})) {
-      let fieldSchema = buildZodSchema(prop);
-      if (!schema.required?.includes(key)) {
-        fieldSchema = fieldSchema.optional();
-      }
-      shape[key] = fieldSchema;
-    }
-    return z.object(shape);
-  }
-  return z.any();
-}
-
-function validateSchema(schema: RuneSchema | undefined, value: unknown, prefix: string): void {
-  if (!schema) return;
-  const zodSchema = buildZodSchema(schema);
+function validateWithZod(zodSchema: z.ZodType<any> | undefined, value: unknown, prefix: string): void {
+  if (!zodSchema) return;
   const result = zodSchema.safeParse(value);
   if (!result.success) {
     throw new Error(
       `${prefix}: ${result.error.issues.map((e: any) => `${e.path.join(".")}: ${e.message}`).join(", ")}`,
     );
   }
-}
-
-async function audit(context: RuneContext, event: Parameters<typeof appendAuditEvent>[1]): Promise<void> {
-  if (!context.audit) return;
-  await appendAuditEvent(context.workspace, event);
 }

@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { type RuntimeConfig, loadRuntimeConfig } from "../config/runtime-config.js";
 import type { Rune } from "../core/types.js";
 import { isRisk, runAgentTurn } from "../runtime/runtime.js";
+import { AgentLoop } from "../agent/agent.js";
 
 export const spawnVesselRune: Rune<
   { readonly soul: string; readonly vows: readonly string[]; readonly objective: string },
@@ -140,4 +141,46 @@ export const delegateVesselRune: Rune<
   },
 };
 
-export const vesselsRunes = [spawnVesselRune, delegateVesselRune];
+export const speculateRune: Rune<
+  { readonly objective: string },
+  { readonly plan: any; readonly observations: any[] }
+> = {
+  name: "vessels.speculate",
+  description: "Spawns a speculative execution in an isolated workspace branch and returns the hypothetical result without merging any changes back.",
+  risk: "execute",
+  inputSchema: {
+    type: "object",
+    required: ["objective"],
+    properties: {
+      objective: { type: "string" },
+    },
+  },
+  async invoke(input, context) {
+    const sovereign = context.sovereign;
+    const chronicle = context.chronicle;
+    if (!sovereign) throw new Error("vessels.speculate requires a sovereign shard in context");
+    if (!chronicle) throw new Error("vessels.speculate requires a chronicle in context");
+
+    const childSessionId = `${context.sessionId}:spec-${Math.random().toString(36).substring(2, 8)}`;
+
+    const result = await new AgentLoop({
+      sovereign,
+      runes: context.registry!,
+      workspace: context.workspace,
+      sessionId: context.sessionId,
+      chronicle,
+    }).speculate(input.objective, childSessionId);
+
+    return {
+      plan: result.plan,
+      observations: result.observations.map((obs) => ({
+        step: obs.step,
+        thought: obs.thought,
+        rune: obs.rune,
+        error: obs.error,
+      })),
+    };
+  },
+};
+
+export const vesselsRunes = [spawnVesselRune, delegateVesselRune, speculateRune];

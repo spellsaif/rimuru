@@ -37,6 +37,7 @@ import {
   createRuntime,
   runtimePaths,
   listVessels,
+  isSafeExternalHttpUrl,
   type GateStatus,
 } from "@rimuru/core";
 
@@ -114,7 +115,7 @@ export async function createGateHttpServer(options: GateServerOptions): Promise<
         request.method === "OPTIONS" ||
         (request.method === "GET" &&
           (url.pathname === "/" || url.pathname === "/health" || url.pathname === "/room")) ||
-        (request.method === "POST" && parts[0] === "circles" && parts[1]);
+        (request.method === "POST" && isPublicCircleRoute(options.config, parts));
 
       if (gatewayToken && !isPublicRoute) {
         const authHeader = request.headers["authorization"];
@@ -796,6 +797,21 @@ async function handleCircleWebhook(ctx: RouteContext) {
   const text = readPrompt(body);
   const sessionId =
     readOptionalString(body, "sessionId") ?? (circle as any).sessionId ?? `webhook-${circle.name}-${from}`;
+  const callbackUrl = readOptionalString(body, "callbackUrl") ?? (circle as any).callbackUrl;
+  if (callbackUrl) {
+    try {
+      isSafeExternalHttpUrl(callbackUrl);
+    } catch (error) {
+      sendJson(
+        response,
+        request,
+        400,
+        { error: "Bad Request", message: error instanceof Error ? error.message : String(error) },
+        options.corsOrigins,
+      );
+      return true;
+    }
+  }
 
   const message =
     circle.name === "local"
@@ -819,7 +835,6 @@ async function handleCircleWebhook(ctx: RouteContext) {
   Promise.resolve().then(async () => {
     try {
       const result = await handleCircleMessage(options, flowBus, message, (circle as any).allowFrom ?? []);
-      const callbackUrl = readOptionalString(body, "callbackUrl") ?? (circle as any).callbackUrl;
       if (callbackUrl && "response" in result) {
         await fetch(callbackUrl, {
           method: "POST",
@@ -1074,6 +1089,14 @@ function gateProviders(config: RuntimeConfig): unknown {
   };
 }
 
+function isPublicCircleRoute(config: RuntimeConfig, parts: readonly string[]): boolean {
+  if (parts[0] !== "circles" || !parts[1]) return false;
+  const circle = circleByName(config, parts[1]);
+  if (!circle) return false;
+  if (circle.kind === "webhook" && parts[2] === "message") return true;
+  return (circle.kind === "slack" || circle.kind === "discord") && parts[2] === circle.kind;
+}
+
 function createSessionId(): string {
   return `soul-${new Date()
     .toISOString()
@@ -1274,7 +1297,8 @@ function corsHeaders(request?: IncomingMessage, allowedOrigins?: readonly string
   return {
     "Access-Control-Allow-Origin": isAllowed && origin ? origin : "null",
     "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers":
+      "Authorization, Content-Type, X-Rimuru-Token, X-Webhook-Secret, X-Slack-Request-Timestamp, X-Slack-Signature, X-Signature-Timestamp, X-Signature-Ed25519",
     Vary: "Origin",
   };
 }

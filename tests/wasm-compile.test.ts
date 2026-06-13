@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { compileWasmRune, discoverSandboxedRunes, getVaultSecret, setVaultSecret } from "../src/index.js";
+import { compileRune, discoverSandboxedRunes, getVaultSecret, setVaultSecret } from "../src/index.js";
 import { execSync } from "node:child_process";
 
-describe("WASM/JS synthesis and compilation engine", () => {
+describe("compile rune engine", () => {
   it("compiles and runs a TS rune dynamically", async () => {
     const root = await mkdtemp(join(tmpdir(), "rimuru-ts-compile-"));
     try {
@@ -20,10 +20,8 @@ describe("WASM/JS synthesis and compilation engine", () => {
         globalThis.output = { doubled: a * 2 };
       `;
 
-      // Call the compileWasm Rune
-      const result = await compileWasmRune.invoke(
+      const result = await compileRune.invoke(
         {
-          language: "typescript",
           sourceCode,
           name: "double_tool",
           description: "Doubles input values",
@@ -34,19 +32,16 @@ describe("WASM/JS synthesis and compilation engine", () => {
       expect(result.path).toContain("double_tool.js");
       expect(result.configPath).toContain("double_tool.json");
 
-      // Verify the generated files exist
       const configContent = await readFile(result.configPath, "utf8");
       const config = JSON.parse(configContent);
       expect(config.name).toBe("custom.double_tool");
       expect(config.description).toBe("Doubles input values");
 
-      // Discover sandboxed runes in this workspace
       const runes = await discoverSandboxedRunes(root);
       expect(runes).toHaveLength(1);
       const rune = runes[0]!;
       expect(rune.name).toBe("custom.double_tool");
 
-      // Invoke the discovered rune
       const output = await rune.invoke({ val: 21 }, context as any);
       expect(output).toEqual({ doubled: 42 });
     } finally {
@@ -69,9 +64,8 @@ describe("WASM/JS synthesis and compilation engine", () => {
         }
       `;
 
-      const result = await compileWasmRune.invoke(
+      const result = await compileRune.invoke(
         {
-          language: "typescript",
           sourceCode,
           name: "loveCalculator",
           description: "Calculates compatibility",
@@ -94,66 +88,6 @@ describe("WASM/JS synthesis and compilation engine", () => {
     }
   });
 
-  it("compiles and runs a Rust WASM rune dynamically using WASI", async () => {
-    const root = await mkdtemp(join(tmpdir(), "rimuru-rust-compile-"));
-    try {
-      const context = {
-        workspace: root,
-        sessionId: "test-rust-session",
-        allowedRisks: ["read", "write", "execute"] as any,
-      };
-
-      // Rust code that reads stdin and echoes back a JSON structure
-      const sourceCode = `
-        use std::io::{self, Read};
-        fn main() {
-            let mut buffer = String::new();
-            io::stdin().read_to_string(&mut buffer).unwrap();
-            println!("{{\\\"echo\\\": {}}}", buffer.trim());
-        }
-      `;
-
-      // Call the compileWasm Rune
-      const result = await compileWasmRune.invoke(
-        {
-          language: "rust",
-          sourceCode,
-          name: "rust_echo",
-          description: "Echoes input via WASI",
-        },
-        context as any,
-      );
-
-      expect(result.path).toContain("rust_echo.wasm");
-      expect(result.configPath).toContain("rust_echo.json");
-
-      // Discover sandboxed runes
-      const runes = await discoverSandboxedRunes(root);
-      expect(runes).toHaveLength(1);
-      const rune = runes[0]!;
-      expect(rune.name).toBe("custom.rust_echo");
-
-      // Invoke the discovered rune with a structured object
-      // It passes the JSON input to stdin and parses the returned JSON output
-      const inputVal = { message: "Attested sovereign execution" };
-
-      const t1 = performance.now();
-      const output = await rune.invoke(inputVal, context as any);
-      const firstDuration = performance.now() - t1;
-
-      expect(output).toEqual({ echo: inputVal });
-
-      // Run a second time to verify compilation caching speedup
-      const t2 = performance.now();
-      const output2 = await rune.invoke(inputVal, context as any);
-      const secondDuration = performance.now() - t2;
-
-      expect(output2).toEqual({ echo: inputVal });
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
-  });
-
   it("sanitizes invalid risk levels and falls back to execute", async () => {
     const root = await mkdtemp(join(tmpdir(), "rimuru-risk-fallback-"));
     try {
@@ -163,9 +97,8 @@ describe("WASM/JS synthesis and compilation engine", () => {
         allowedRisks: ["read", "write", "execute"] as any,
       };
 
-      const result = await compileWasmRune.invoke(
+      const result = await compileRune.invoke(
         {
-          language: "typescript",
           sourceCode: `globalThis.output = "ok";`,
           name: "test_fallback",
           description: "Tests risk fallback",
@@ -193,22 +126,18 @@ describe("WASM/JS synthesis and compilation engine", () => {
         }).trim();
       } catch {}
 
-      // Temporarily store a key in the OS keychain using secret-tool
       const testKey = "super-secret-keychain-vault-key-" + Date.now();
       try {
         execSync(`echo "${testKey}" | secret-tool store --label="Rimuru Vault" app rimuru`);
       } catch (err) {
-        // Skip test if keychain access is not available/supported in this execution environment
         return;
       }
 
-      // Verify that vault operation works WITHOUT env.RIMURU_VAULT_KEY
       const emptyEnv = {};
       await setVaultSecret(root, "my_api_key", "attested-value", emptyEnv);
       const retrieved = await getVaultSecret(root, "my_api_key", emptyEnv);
       expect(retrieved).toBe("attested-value");
     } finally {
-      // Clean up / restore original keychain entry
       if (originalKey) {
         try {
           execSync(`echo "${originalKey}" | secret-tool store --label="Rimuru Vault" app rimuru`);

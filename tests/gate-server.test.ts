@@ -6,6 +6,78 @@ import { listenGateServer } from "../packages/gate/src/index.ts";
 import type { RuntimeConfig } from "../src/index.js";
 
 describe("Gate HTTP server", () => {
+  it("requires gateway authorization for local circle messages when a token is configured", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rimuru-gate-auth-"));
+    const previousToken = process.env.RIMURU_GATEWAY_TOKEN;
+    process.env.RIMURU_GATEWAY_TOKEN = "gate-token";
+    const config: RuntimeConfig = {
+      vesselId: "main",
+      provider: "mock",
+      model: "mock",
+      sessionId: "default",
+      memoryDir: join(root, ".rimuru", "sessions"),
+      allowedRisks: ["read"],
+      sandboxMode: "none",
+      vessels: {},
+      fallbackShards: [],
+      circles: [{ name: "local", kind: "local", enabled: true, allowFrom: ["*"] }],
+      gatewayPort: 19710,
+    };
+    const gate = await listenGateServer({ config, workspace: root, port: 0 });
+    try {
+      const denied = await fetch(`${gate.url}/circles/local/message`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: "hello" }),
+      });
+      expect(denied.status).toBe(401);
+
+      const allowed = await fetch(`${gate.url}/circles/local/message`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer gate-token" },
+        body: JSON.stringify({ prompt: "hello" }),
+      });
+      expect(allowed.status).toBe(200);
+    } finally {
+      if (previousToken === undefined) delete process.env.RIMURU_GATEWAY_TOKEN;
+      else process.env.RIMURU_GATEWAY_TOKEN = previousToken;
+      await gate.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("allows browser preflights to send gateway authorization headers", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rimuru-gate-cors-"));
+    const config: RuntimeConfig = {
+      vesselId: "main",
+      provider: "mock",
+      model: "mock",
+      sessionId: "default",
+      memoryDir: join(root, ".rimuru", "sessions"),
+      allowedRisks: ["read"],
+      sandboxMode: "none",
+      vessels: {},
+      fallbackShards: [],
+      circles: [{ name: "local", kind: "local", enabled: true, allowFrom: ["*"] }],
+      gatewayPort: 19710,
+    };
+    const gate = await listenGateServer({ config, workspace: root, port: 0 });
+    try {
+      const response = await fetch(`${gate.url}/chat`, {
+        method: "OPTIONS",
+        headers: {
+          Origin: "http://localhost:3000",
+          "Access-Control-Request-Headers": "authorization, content-type",
+        },
+      });
+      expect(response.status).toBe(204);
+      expect(response.headers.get("access-control-allow-headers")?.toLowerCase()).toContain("authorization");
+    } finally {
+      await gate.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("serves status, runes, sessions, and chat", async () => {
     const root = await mkdtemp(join(tmpdir(), "rimuru-gate-"));
     const config: RuntimeConfig = {
@@ -153,6 +225,13 @@ describe("Gate HTTP server", () => {
         body: JSON.stringify({ prompt: "hello" }),
       });
       expect(res5.status).toBe(202);
+
+      const res6 = await fetch(`${gate.url}/circles/my-webhook/message`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer super-secret-token" },
+        body: JSON.stringify({ prompt: "hello", callbackUrl: "http://127.0.0.1:9/callback" }),
+      });
+      expect(res6.status).toBe(400);
     } finally {
       await new Promise((resolve) => setTimeout(resolve, 200));
       await gate.close();

@@ -1,6 +1,14 @@
 import { parse, relative, resolve, sep } from "node:path";
 
-export function resolveWorkspacePath(workspace: string, path: string): string {
+export interface ResolveWorkspacePathOptions {
+  readonly allowRimuruInternal?: boolean;
+}
+
+export function resolveWorkspacePath(
+  workspace: string,
+  path: string,
+  options: ResolveWorkspacePathOptions = {},
+): string {
   const root = resolve(workspace);
   const resolved = resolve(root, path);
 
@@ -9,20 +17,20 @@ export function resolveWorkspacePath(workspace: string, path: string): string {
   }
 
   const rel = relative(root, resolved);
-  if (rel === "" || rel.startsWith("..") || rel.includes(`..${sep}`)) {
+  if (rel === ".." || rel.startsWith(`..${sep}`)) {
     throw new Error(`Path escapes workspace: ${path}`);
   }
 
   // Sovereign Blindspot: Forbid AI from reading its own internal secrets
   const normalizedRel = rel.replace(/\\/g, "/");
   const sensitivePaths = [
-    ".rimuru/circles",
-    ".rimuru/vault.json",
-    ".rimuru/pairings.json",
-    ".rimuru/gate-state.json",
+    ".rimuru",
     "rimuru.config.json",
   ];
-  if (sensitivePaths.some((p) => normalizedRel === p || normalizedRel.startsWith(`${p}/`))) {
+  if (
+    !options.allowRimuruInternal &&
+    sensitivePaths.some((p) => normalizedRel === p || normalizedRel.startsWith(`${p}/`))
+  ) {
     throw new Error(`Access to sensitive Sovereign internal path denied: ${rel}`);
   }
 

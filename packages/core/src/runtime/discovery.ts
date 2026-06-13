@@ -1,15 +1,8 @@
-import { execFile } from "node:child_process";
 import { readFile, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { promisify } from "node:util";
-import type { Rune, RuneContext, RuneRisk } from "../core/types.js";
+import type { Rune, RuneRisk } from "../core/types.js";
+import { executeDynamicRune } from "../security/sandbox-vm.js";
 
-const execFileAsync = promisify(execFile);
-
-/**
- * Persona management.
- * Loads the system prompt from SOUL.md if it exists in the workspace.
- */
 export async function loadSoul(workspace: string): Promise<string | undefined> {
   try {
     const content = await readFile(resolve(workspace, "SOUL.md"), "utf8");
@@ -18,16 +11,6 @@ export async function loadSoul(workspace: string): Promise<string | undefined> {
     return undefined;
   }
 }
-
-/**
- * Dynamic skill discovery.
- * Deprecated for security boundary protection to prevent host-escape RCE vulnerabilities from untrusted code.
- */
-export async function discoverWorkspaceRunes(workspace: string): Promise<readonly Rune[]> {
-  return [];
-}
-
-import { executeDynamicRune } from "../security/sandbox-vm.js";
 
 /**
  * Discovers sandboxed runes in .rimuru/runes/ workspace directory.

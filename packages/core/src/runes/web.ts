@@ -1,4 +1,5 @@
 import type { Rune } from "../core/types.js";
+import { isSafeExternalHttpUrl, readResponseTextWithLimit } from "../security/url.js";
 
 // Helper to strip HTML tags and decode basic HTML entities
 function stripHtmlTags(str: string): string {
@@ -76,32 +77,34 @@ export const webSearchRune: Rune<
     const html = await response.text();
     const results: { title: string; snippet: string; url: string }[] = [];
     const resultRegex = /<div[^>]+class="[^"]*result__body[^"]*"[^>]*>([\s\S]*?)<\/div>/g;
-    let match: RegExpExecArray | null;
+    let match = resultRegex.exec(html);
 
-    while ((match = resultRegex.exec(html)) !== null) {
-      const body = match[1]!;
+    while (match !== null) {
+      const body = match[1] ?? "";
       const urlAnchorMatch = body.match(/<a[^>]+class="[^"]*result__url[^"]*"[^>]*>([\s\S]*?)<\/a>/i);
       const snippetAnchorMatch = body.match(/<a[^>]+class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/i);
 
       if (urlAnchorMatch) {
         const fullAnchor = urlAnchorMatch[0];
         const hrefMatch = fullAnchor.match(/href="([^"]+)"/i);
-        if (hrefMatch) {
-          const rawUrl = hrefMatch[1]!;
+        const rawUrl = hrefMatch?.[1];
+        if (rawUrl) {
           let targetUrl = rawUrl;
           const uddgMatch = rawUrl.match(/[?&]uddg=([^&]+)/);
-          if (uddgMatch) {
-            targetUrl = decodeURIComponent(uddgMatch[1]!);
+          const encodedTarget = uddgMatch?.[1];
+          if (encodedTarget) {
+            targetUrl = decodeURIComponent(encodedTarget);
           }
 
-          const title = stripHtmlTags(urlAnchorMatch[1]!).trim();
-          const snippet = snippetAnchorMatch ? stripHtmlTags(snippetAnchorMatch[1]!).trim() : "";
+          const title = stripHtmlTags(urlAnchorMatch[1] ?? "").trim();
+          const snippet = snippetAnchorMatch ? stripHtmlTags(snippetAnchorMatch[1] ?? "").trim() : "";
 
           if (title && targetUrl) {
             results.push({ title, snippet, url: targetUrl });
           }
         }
       }
+      match = resultRegex.exec(html);
     }
 
     return { results };
@@ -120,23 +123,37 @@ export const webFetchUrlRune: Rune<{ readonly url: string }, { readonly title: s
     },
   },
   async invoke(input) {
-    const response = await fetch(input.url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      },
-    });
+    const url = isSafeExternalHttpUrl(input.url);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+    try {
+      const response = await fetch(url.href, {
+        signal: controller.signal,
+        redirect: "follow",
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+      });
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch web page: ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch web page: ${response.statusText}`);
+      }
+
+      const contentType = response.headers?.get?.("content-type") ?? "";
+      if (contentType && !/text\/|application\/(xhtml\+xml|xml|json)/i.test(contentType)) {
+        throw new Error(`Failed to fetch web page: unsupported content type ${contentType}`);
+      }
+
+      const html = await readResponseTextWithLimit(response, 1_000_000);
+      const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+      const title = titleMatch ? stripHtmlTags(titleMatch[1] ?? "").trim() : "Untitled Page";
+      const content = htmlToMarkdown(html);
+
+      return { title, content };
+    } finally {
+      clearTimeout(timeout);
     }
-
-    const html = await response.text();
-    const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-    const title = titleMatch ? stripHtmlTags(titleMatch[1]!).trim() : "Untitled Page";
-    const content = htmlToMarkdown(html);
-
-    return { title, content };
   },
 };
 

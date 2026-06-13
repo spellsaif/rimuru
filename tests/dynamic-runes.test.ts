@@ -39,4 +39,10 @@ describe("dynamic WASM-sandboxed runes", () => {
     `;
     await expect(executeDynamicRune(code, {})).rejects.toThrow("Dynamic VM execution error");
   });
+
+  it("interrupts runaway code", async () => {
+    await expect(executeDynamicRune("while (true) {}", {}, { timeoutMs: 20 })).rejects.toThrow(
+      "Dynamic VM execution timed out",
+    );
+  });
 });

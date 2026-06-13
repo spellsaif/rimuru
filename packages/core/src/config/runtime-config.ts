@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import { getVaultSecret } from "@rimuru/vault";
 
 export type ProviderKind = "mock" | "openai-compatible" | "anthropic" | "gemini" | "ollama" | "openrouter";
@@ -110,14 +110,16 @@ export async function loadRuntimeConfig(options: LoadConfigOptions): Promise<Run
       fileConfig.soul ??
       fileConfig.sessionId ??
       "default",
-    memoryDir:
+    memoryDir: resolveConfigPath(
+      options.workspace,
       env.RIMURU_CHRONICLE_DIR ??
-      env.RIMURU_MEMORY_DIR ??
-      vessel?.chronicleDir ??
-      vessel?.memoryDir ??
-      fileConfig.chronicleDir ??
-      fileConfig.memoryDir ??
-      join(options.workspace, ".rimuru", "sessions"),
+        env.RIMURU_MEMORY_DIR ??
+        vessel?.chronicleDir ??
+        vessel?.memoryDir ??
+        fileConfig.chronicleDir ??
+        fileConfig.memoryDir ??
+        join(options.workspace, ".rimuru", "sessions"),
+    ),
     allowedRisks: parseAllowedRisks(
       env.RIMURU_VOWS ??
         env.RIMURU_ALLOW_RISKS ??
@@ -222,4 +224,8 @@ function parsePort(value: string | number | undefined, fallback: number): number
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0 || parsed > 65535) throw new Error(`Unsupported Gate port: ${value}`);
   return parsed;
+}
+
+function resolveConfigPath(workspace: string, path: string): string {
+  return isAbsolute(path) ? resolve(path) : resolve(workspace, path);
 }
