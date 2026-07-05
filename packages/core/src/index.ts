@@ -1,4 +1,11 @@
+export { applyTempestConfig, defaultTempestConfig, describeTempestFeature } from "./tempest.js";
+export type { TempestConfig } from "./tempest.js";
+
 export { FlowBus } from "./core/events.js";
+export { ReflectiveChronicle, HotTier, JsonColdStore, JsonCrystalStore, createReflectiveChronicle } from "./core/reflective-chronicle.js";
+export type { ColdStore, ColdEntry, CrystalEntry, CrystalStore, Embedder, RecallOptions, RecallResult } from "./core/reflective-chronicle.js";
+export { runeToPredicate, predicatesToToolDescriptions, supportsFunctionCalling, validatePredicateRoundTrip } from "./core/predicate.js";
+export type { Predicate, Vow, Barrier, PredicateCost, ProviderTool } from "./core/predicate.js";
 export { appendAuditEvent, auditLogPath, listAuditEvents } from "./core/audit.js";
 export { createCanvasArtifact, listCanvasArtifacts, readCanvasArtifact } from "./canvas/canvas.js";
 export {
@@ -81,6 +88,8 @@ export { renderSystemdUserService, writeSystemdUserService } from "./service/ser
 export { deleteVaultSecret, getVaultSecret, listVaultSecrets, setVaultSecret } from "@rimuru/vault";
 
 export { activeVessel, listVessels } from "./vessels/vessels.js";
+export { Swarm, CrdtBus } from "./vessels/swarm.js";
+export type { SwarmConfig, SwarmTopology, SwarmVesselHandle, SwarmResult, VesselPeerConfig } from "./vessels/swarm.js";
 export { spawnVesselRune, delegateVesselRune, speculateRune, vesselsRunes } from "./runes/vessels-rune.js";
 export {
   discoverPluginManifests,
@@ -109,7 +118,11 @@ export { assertCommandName, resolveWorkspacePath } from "./security/workspace.js
 export { runSandboxedCommand, sandboxModeFromEnv } from "./security/sandbox.js";
 export { executeDynamicRune } from "./security/sandbox-vm.js";
 export { isSafeExternalHttpUrl, readResponseTextWithLimit } from "./security/url.js";
-export { createWorkspaceBranch, deleteWorkspaceBranch, mergeWorkspaceBranch } from "./security/branch.js";
+export { createWorkspaceBranch, deleteWorkspaceBranch, mergeWorkspaceBranch, checkMerkleIntegrity, verifyAndMergeWorkspaceBranch } from "./security/branch.js";
+export { computeMerkleTree, verifyMerkleTree, computeFileHash, MerkleMismatchError } from "./security/merkle.js";
+export { createMergeEnvelope, verifyMergeEnvelope, saveMergeEnvelope, deriveSigningKey } from "./security/merge-envelope.js";
+export type { MerkleTree, MerkleNode } from "./security/merkle.js";
+export type { MergeEnvelope, MergePolicy } from "./security/merge-envelope.js";
 export { exportTrajectory, exportRunResult, exportTrajectoryFromSessions } from "./training/exporter.js";
 // Dashboard logic moved to @rimuru/cli
 
@@ -154,6 +167,9 @@ export type { SandboxCommandInput, SandboxMode } from "./security/sandbox.js";
 export type { ShareGPTTrajectory, ShareGPTMessage } from "./training/exporter.js";
 export { SkillRegistry } from "./skills/registry.js";
 export type { Skill } from "./skills/registry.js";
+export { LatticeRegistry, computeSkillCid, computeSourceHash, loadSkillManifest, saveSkillManifest, mergeVows, strictestVow } from "./skills/lattice.js";
+export type { SkillManifest, ComposedSkill, LatticeRegistryOptions } from "./skills/lattice.js";
 export type { StagingEntry, StagingStore } from "./core/middleware.js";
+export { jsonSchemaToZod, zodToOpenAISchema, zodToAnthropicSchema, zodToGeminiSchema } from "./core/schema.js";
 export type { JsonSchemaType, JsonSchemaField, JsonSchemaObject } from "./core/schema.js";
 export type * from "./core/types.js";

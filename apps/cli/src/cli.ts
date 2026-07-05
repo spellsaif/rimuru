@@ -40,6 +40,9 @@ import {
   listCanvasArtifacts,
   readCanvasArtifact,
   writeSystemdUserService,
+  defaultTempestConfig,
+  applyTempestConfig,
+  describeTempestFeature,
 } from "@rimuru/core";
 import { getGateStatus, readGateState, stopGate, listenGateServer, getGateRuntimeStatus } from "@rimuru/gate";
 import { deleteVaultSecret, getVaultSecret, listVaultSecrets, setVaultSecret } from "@rimuru/vault";
@@ -107,9 +110,11 @@ program
   .alias("init")
   .alias("awaken")
   .description("Initialize or reset a Rimuru workspace")
-  .action(async () => {
+  .option("--tempest", "Enable all Tempest protocol features interactively")
+  .option("--force", "Overwrite existing workspace config")
+  .action(async (opts) => {
     printBanner();
-    await init();
+    await init(opts);
   });
 
 program
@@ -585,16 +590,83 @@ async function doctor(): Promise<void> {
   }
 }
 
-async function init(): Promise<void> {
+async function init(opts: { tempest?: boolean; force?: boolean } = {}): Promise<void> {
   const isInteractive =
+    opts.tempest ||
     process.argv.includes("--wizard") ||
     process.argv.includes("--interactive") ||
     (process.stdin.isTTY && process.argv.length <= 3);
 
+  if (opts.tempest) {
+    const p = await import("@clack/prompts");
+    p.intro(chalk.bgMagenta.black(" TEMPEST PROTOCOL ACTIVATION "));
+
+    p.log.info("The following Tempest protocol features will be enabled:");
+    const features = ["predicates", "reflectiveChronicle", "verifiableSpeculation", "greatSageSwarm", "skillLattice"];
+    for (const f of features) {
+      p.log.step(describeTempestFeature(f));
+    }
+
+    const confirm = await p.confirm({
+      message: "Activate all Tempest features?",
+      initialValue: true,
+    });
+    if (p.isCancel(confirm) || !confirm) {
+      p.cancel("Tempest activation cancelled.");
+      return;
+    }
+
+    const enableSwarm = await p.confirm({
+      message: "Enable Great Sage multi-vessel swarm (uses worker threads)?",
+      initialValue: false,
+    });
+    const swarmTopology = !p.isCancel(enableSwarm) && enableSwarm
+      ? (await p.select({
+          message: "Swarm topology:",
+          options: [
+            { label: "Star (hub & spoke)", value: "star" },
+            { label: "Mesh (all-to-all)", value: "mesh" },
+            { label: "Ring (token-passing)", value: "ring" },
+          ],
+        }))
+      : undefined;
+
+    const spinner = p.spinner();
+    spinner.start("Applying Tempest config...");
+
+    const local = await readLocalConfig();
+    const tempestCfg = applyTempestConfig(local, {
+      enableGreatSageSwarm: !p.isCancel(enableSwarm) && enableSwarm === true,
+      swarmTopology: swarmTopology as "star" | "mesh" | "ring" | undefined,
+    });
+
+    if (!local.vessel && !local.vessels) {
+      tempestCfg.vessel = "main";
+      tempestCfg.vessels = {
+        main: {
+          shard: "openai-compatible",
+          model: "gpt-4.1-mini",
+          soul: "default",
+          vows: ["read"],
+          barrier: "none",
+        },
+      };
+    }
+
+    await writeLocalConfig(tempestCfg);
+    spinner.stop("Tempest protocol activated.");
+
+    p.outro(
+      `Tempest features enabled. Run ${chalk.cyan("rimuru doctor")} to verify.\n` +
+      `Edit ${chalk.cyan("rimuru.config.json")} to fine-tune settings.`,
+    );
+    return;
+  }
+
   if (isInteractive) {
     const result = await setupWorkspaceInteractive({
       workspace: process.cwd(),
-      force: process.argv.includes("--force"),
+      force: opts.force ?? process.argv.includes("--force"),
     });
     process.stdout.write(`\nInitialized Rimuru workspace at ${process.cwd()}\nConfig: ${result.configPath}\n`);
     return;
@@ -615,7 +687,7 @@ async function init(): Promise<void> {
       .filter(Boolean),
     barrier: parseBarrierArg(argValue(process.argv, "--barrier") ?? "none"),
     gatewayPort: Number(argValue(process.argv, "--port") ?? 19710),
-    force: process.argv.includes("--force"),
+    force: opts.force ?? process.argv.includes("--force"),
   });
   process.stdout.write(`Initialized Rimuru workspace at ${process.cwd()}\nConfig: ${result.configPath}\n`);
 }
