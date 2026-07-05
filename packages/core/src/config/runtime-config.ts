@@ -56,6 +56,7 @@ export interface RuntimeConfig {
   readonly fallbackShards: readonly ProviderAttempt[];
   readonly circles: readonly CircleConfig[];
   readonly gatewayPort: number;
+  readonly swarmTopology?: "star" | "mesh" | "ring";
 }
 
 export interface LoadConfigOptions {
