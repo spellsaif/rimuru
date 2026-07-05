@@ -1,6 +1,8 @@
 import { existsSync } from "node:fs";
 import { cp, mkdir, readdir, rm, stat, symlink } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { computeMerkleTree, MerkleMismatchError } from "./merkle.js";
+import { type MergeEnvelope, type MergePolicy, verifyMergeEnvelope, loadMergeEnvelope } from "./merge-envelope.js";
 
 export interface BranchOptions {
   readonly ignoreDirs?: readonly string[];
@@ -55,6 +57,48 @@ export async function mergeWorkspaceBranch(
   const mergedFiles: string[] = [];
   await mergeDirRecursive(branchDir, root, branchDir, root, options, mergedFiles);
   return mergedFiles;
+}
+
+export async function checkMerkleIntegrity(
+  workspace: string,
+  branchId: string,
+  expectedRootHash?: string,
+): Promise<string> {
+  const branchDir = resolve(workspace, ".rimuru", "branches", branchId);
+  if (!existsSync(branchDir)) throw new Error(`Branch directory does not exist: ${branchDir}`);
+
+  const tree = await computeMerkleTree(branchDir);
+
+  if (expectedRootHash && tree.rootHash !== expectedRootHash) {
+    throw new MerkleMismatchError(branchId, expectedRootHash, tree.rootHash);
+  }
+
+  return tree.rootHash;
+}
+
+export async function verifyAndMergeWorkspaceBranch(
+  workspace: string,
+  branchId: string,
+  options?: {
+    readonly envelope?: MergeEnvelope;
+    readonly secretKey?: string;
+    readonly policy?: MergePolicy;
+  },
+): Promise<readonly string[]> {
+  const envelope = options?.envelope ?? (await loadMergeEnvelope(workspace, branchId));
+  if (!envelope) {
+    return mergeWorkspaceBranch(workspace, branchId);
+  }
+
+  if (options?.policy === "consensus" && options?.secretKey) {
+    if (!verifyMergeEnvelope(envelope, options.secretKey)) {
+      throw new MerkleMismatchError(branchId, envelope.rootHash, "invalid-signature");
+    }
+  }
+
+  await checkMerkleIntegrity(workspace, branchId, envelope.rootHash);
+
+  return mergeWorkspaceBranch(workspace, branchId);
 }
 
 async function copyDirRecursive(

@@ -10,8 +10,14 @@ import {
   RuneRegistry,
   Sovereign,
   workspaceRune,
+  createWorkspaceBranch,
   mergeWorkspaceBranch,
   deleteWorkspaceBranch,
+  computeMerkleTree,
+  checkMerkleIntegrity,
+  MerkleMismatchError,
+  createMergeEnvelope,
+  verifyAndMergeWorkspaceBranch,
 } from "../src/index.js";
 
 describe("AgentLoop speculative branching", () => {
@@ -78,6 +84,71 @@ describe("AgentLoop speculative branching", () => {
       // 5. Clean up speculative branch
       await deleteWorkspaceBranch(root, childSessionId);
       expect(existsSync(branchDir)).toBe(false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("detects tampering via Merkle mismatch when a byte is flipped in a branch before merge", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rimuru-merkle-"));
+    try {
+      await writeFile(join(root, "important.txt"), "original content", "utf8");
+
+      const branchId = "merkle-branch-1";
+
+      // Create branch and compute Merkle root
+      const dir = await createWorkspaceBranch(root, branchId);
+      const tree1 = await computeMerkleTree(dir);
+      expect(tree1.rootHash).toBeTruthy();
+      expect(tree1.nodes.length).toBeGreaterThan(0);
+
+      // Modify a file in the branch (simulating work)
+      await writeFile(join(dir, "important.txt"), "modified by speculation", "utf8");
+
+      // Compute new Merkle root after modification
+      const tree2 = await computeMerkleTree(dir);
+      expect(tree2.rootHash).not.toBe(tree1.rootHash);
+
+      // Simulate tampering: flip a byte
+      const content = await readFile(join(dir, "important.txt"), "utf8");
+      const tampered = content.replace("modified", "MODIFIED");
+      await writeFile(join(dir, "important.txt"), tampered, "utf8");
+
+      // Verification should detect the tamper
+      await expect(checkMerkleIntegrity(root, branchId, tree2.rootHash)).rejects.toThrow(MerkleMismatchError);
+
+      // Clean up
+      await deleteWorkspaceBranch(root, branchId);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("creates and verifies a merge envelope", async () => {
+    const root = await mkdtemp(join(tmpdir(), "rimuru-envelope-"));
+    try {
+      await writeFile(join(root, "data.txt"), "test data", "utf8");
+
+      const branchId = "envelope-branch";
+      const dir = await createWorkspaceBranch(root, branchId);
+      const tree = await computeMerkleTree(dir);
+
+      const envelope = await createMergeEnvelope({
+        branchId,
+        rootHash: tree.rootHash,
+        tests: ["test-1", "test-2"],
+        signedBy: "test-vessel",
+        signingKey: "test-signing-key",
+      });
+
+      expect(envelope.branchId).toBe(branchId);
+      expect(envelope.rootHash).toBe(tree.rootHash);
+      expect(envelope.tests).toEqual(["test-1", "test-2"]);
+      expect(envelope.signedBy).toBe("test-vessel");
+      expect(envelope.signature).toBeTruthy();
+
+      // Merge with envelope verification should succeed (unsigned policy)
+      await verifyAndMergeWorkspaceBranch(root, branchId);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
