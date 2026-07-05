@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { Rune, RuneContext, RuneInvocation, RuneMiddleware, RuneRisk } from "./types.js";
+import type { Predicate } from "./predicate.js";
 import { jsonSchemaToZod } from "./schema.js";
+import { runeToPredicate } from "./predicate.js";
 
 export interface RuneEntry {
   readonly rune: Rune;
@@ -15,6 +17,7 @@ export interface RuneRegistryOptions {
 export class RuneRegistry {
   middlewares: RuneMiddleware[];
   readonly #entries = new Map<string, RuneEntry>();
+  readonly #predicates = new Map<string, Predicate>();
   readonly #toolsets = new Map<string, Set<string>>();
   #enabledToolsets = new Set<string>();
 
@@ -22,7 +25,7 @@ export class RuneRegistry {
     this.middlewares = [...(options.middlewares ?? [])];
   }
 
-  register(rune: Rune): void {
+  register(rune: Rune, predicate?: Predicate): void {
     const lowerName = rune.name.toLowerCase();
     if (this.#entries.has(lowerName)) {
       throw new Error(`Rune already registered: ${rune.name}`);
@@ -32,10 +35,18 @@ export class RuneRegistry {
       zodInput: jsonSchemaToZod(rune.inputSchema),
       zodOutput: jsonSchemaToZod(rune.outputSchema),
     });
+    if (predicate) {
+      this.#predicates.set(lowerName, predicate);
+    }
+  }
+
+  registerPredicate(predicate: Predicate): void {
+    this.#predicates.set(predicate.id.toLowerCase(), predicate);
   }
 
   deregister(name: string): void {
     this.#entries.delete(name.toLowerCase());
+    this.#predicates.delete(name.toLowerCase());
   }
 
   toolset(name: string, runeNames: readonly string[]): void {
@@ -60,6 +71,25 @@ export class RuneRegistry {
 
   byRisk(risk: RuneRisk): readonly Rune[] {
     return this.list().filter((r) => r.risk === risk);
+  }
+
+  allPredicates(): readonly Predicate[] {
+    return [...this.#predicates.values()];
+  }
+
+  predicate(name: string): Predicate | undefined {
+    return this.#predicates.get(name.toLowerCase()) ?? undefined;
+  }
+
+  asPredicate(runeName: string): Predicate {
+    const lower = runeName.toLowerCase();
+    const existing = this.#predicates.get(lower);
+    if (existing) return existing;
+    const entry = this.#entries.get(lower);
+    if (!entry) throw new Error(`Unknown rune: ${runeName}`);
+    const pred = runeToPredicate(entry.rune);
+    this.#predicates.set(lower, pred);
+    return pred;
   }
 
   describe(): readonly {

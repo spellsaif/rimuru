@@ -1,4 +1,6 @@
 import type { FlowBus } from "../core/events.js";
+import type { Predicate } from "../core/predicate.js";
+import { supportsFunctionCalling } from "../core/predicate.js";
 import type { RuneRegistry } from "../core/runes.js";
 import type { Sovereign } from "../core/sovereign.js";
 import type { Chronicle, RunResult } from "../core/types.js";
@@ -21,6 +23,8 @@ export interface AgentRunResult {
 }
 
 export class AgentLoop {
+  readonly #hasFunctionCalling: boolean;
+
   constructor(
     private readonly options: {
       readonly sovereign: Sovereign;
@@ -31,8 +35,11 @@ export class AgentLoop {
       readonly audit?: boolean;
       readonly flowBus?: FlowBus;
       readonly chronicle?: Chronicle;
+      readonly providerKind?: string;
     },
-  ) {}
+  ) {
+    this.#hasFunctionCalling = supportsFunctionCalling(options.providerKind ?? "openai-compatible");
+  }
 
   async speculate(objective: string, childSessionId: string): Promise<AgentRunResult> {
     const branchDir = await createWorkspaceBranch(this.options.workspace, childSessionId);
@@ -57,9 +64,12 @@ export class AgentLoop {
   async run(objective: string, onText?: (text: string) => void): Promise<AgentRunResult> {
     const observations: AgentObservation[] = [];
     const maxSteps = this.options.maxSteps ?? 10;
-    const runes = this.options.runes
-      .describe()
-      .map((r) => ({ name: r.name, description: r.description, inputSchema: r.inputSchema }));
+
+    const predicates = this.options.runes.allPredicates();
+    const usePredicates = this.#hasFunctionCalling && predicates.length > 0;
+    const toolList: unknown[] = usePredicates
+      ? (predicates as unknown[])
+      : this.options.runes.describe().map((r) => ({ name: r.name, description: r.description, inputSchema: r.inputSchema }));
 
     const chronicle = this.options.chronicle;
     if (chronicle && typeof (chronicle as any).compact === "function") {
@@ -74,16 +84,18 @@ export class AgentLoop {
     let lastTurn: RunResult | undefined;
 
     for (let step = 1; step <= maxSteps; step++) {
-      const parser = onText ? new ReActStreamParser(onText) : undefined;
+      const parser = !usePredicates && onText ? new ReActStreamParser(onText) : undefined;
       const turnRequest: any = {
         workspace: this.options.workspace,
         sessionId: this.options.sessionId,
-        tools: runes,
+        ...(usePredicates ? { predicates: toolList } : { tools: toolList }),
         ...(parser ? { onText: (chunk: string) => parser.ingest(chunk) } : {}),
       };
 
       if (step === 1) {
-        turnRequest.prompt = this.buildFirstTurnPrompt(objective, runes);
+        turnRequest.prompt = usePredicates
+          ? `You are an AI Agent working toward this objective: "${objective}". Use the available tools to complete it. Call them directly using function calling. When done, call "finish" if that tool exists, or just state the result.`
+          : this.buildFirstTurnPrompt(objective, toolList);
       } else if (lastToolCall) {
         const prev = observations[observations.length - 1]!;
         const content = typeof prev.output === "string" ? prev.output : JSON.stringify(prev.output ?? prev.error);
@@ -101,9 +113,7 @@ export class AgentLoop {
 
       const turn = await this.options.sovereign.run(turnRequest);
       lastTurn = turn;
-      if (parser) {
-        parser.flush();
-      }
+      if (parser) parser.flush();
 
       let thoughtProcess: { type: "call" | "finish"; thought: string; rune?: string; input?: unknown } | undefined;
       lastToolCall = undefined;
@@ -121,8 +131,10 @@ export class AgentLoop {
             input: tc.arguments,
           };
         }
-      } else {
+      } else if (!usePredicates) {
         thoughtProcess = parseAction(turn.response.content);
+      } else {
+        thoughtProcess = { type: "finish", thought: turn.response.content || "Finished" };
       }
 
       if (thoughtProcess?.thought) {
@@ -132,20 +144,12 @@ export class AgentLoop {
       if (!thoughtProcess) {
         const errorMsg =
           "Format Error: Your response did not follow the ReAct loop format. You must start with 'Thought: <reasoning>', followed by 'Action: <rune_name_or_finish>', and then 'Input: <json_input>' on the next lines. Please correct your formatting.";
-        observations.push({
-          step,
-          thought: "Formatting parse failed",
-          error: errorMsg,
-        });
-        if (onText && !parser) {
-          onText(`\x1b[31mParse Error: Invalid ReAct response format.\x1b[0m\n`);
-        }
+        observations.push({ step, thought: "Formatting parse failed", error: errorMsg });
+        if (onText && !parser) onText(`\x1b[31mParse Error: Invalid ReAct response format.\x1b[0m\n`);
         continue;
       }
 
-      if (thoughtProcess.type === "finish") {
-        break;
-      }
+      if (thoughtProcess.type === "finish") break;
 
       const { thought, rune, input } = thoughtProcess;
       let output: unknown;
@@ -153,7 +157,6 @@ export class AgentLoop {
 
       try {
         if (!rune) throw new Error("No rune specified in action");
-
         output = await this.options.runes.invoke(rune, input, {
           workspace: this.options.workspace,
           sessionId: this.options.sessionId,
@@ -165,14 +168,7 @@ export class AgentLoop {
         error = e instanceof Error ? e.message : String(e);
       }
 
-      observations.push({
-        step,
-        thought,
-        rune,
-        input,
-        output,
-        error,
-      });
+      observations.push({ step, thought, rune, input, output, error });
 
       if (onText && !parser) {
         onText(`\x1b[90mThought: ${thought}\x1b[0m\n`);

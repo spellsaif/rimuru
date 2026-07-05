@@ -9,6 +9,8 @@ import type {
   Shard,
   ToolCall,
 } from "./types.js";
+import type { Predicate } from "./predicate.js";
+import { predicateToToolSchema, predicatesToToolDescriptions } from "./predicate.js";
 
 export interface SovereignOptions {
   readonly shard: Shard;
@@ -53,7 +55,10 @@ export class Sovereign {
       at: this.#clock(),
     });
 
-    const response = await this.complete(messages, request.onText, request.tools);
+    const tools = request.predicates?.length
+      ? predicatesToToolDescriptions(request.predicates as any[])
+      : request.tools;
+    const response = await this.complete(messages, request.onText, tools);
     this.#flowBus.emit({ type: "provider.responded", provider: this.#shard.name, at: this.#clock() });
 
     const assistantMessage: Message = {

@@ -21,6 +21,7 @@ export { discoverSandboxedRunes };
 import { vesselsRunes } from "../runes/vessels-rune.js";
 import { webRunes } from "../runes/web.js";
 import { runDueRituals } from "../rituals/rituals.js";
+import { runeToPredicate } from "../core/predicate.js";
 
 export interface RuntimePaths {
   readonly workspace: string;
@@ -151,6 +152,13 @@ export async function createRuntimeRuneRegistry(options: {
   for (const sandboxedRune of await discoverSandboxedRunes(options.workspace)) registry.register(sandboxedRune);
   await registerPlugins(registry, resolve(options.workspace, ".rimuru", "plugins"));
 
+  for (const rune of registry.list()) {
+    const existing = registry.predicate(rune.name);
+    if (!existing) {
+      registry.registerPredicate(runeToPredicate(rune));
+    }
+  }
+
   return registry;
 }
 
@@ -173,6 +181,7 @@ export async function runAgentTurn(options: AgentTurnOptions): Promise<AgentRunR
     audit: true,
     flowBus: options.flowBus,
     chronicle: runtime.chronicle,
+    providerKind: options.config.provider,
   });
 
   const result = await loop.run(options.objective, options.onText);

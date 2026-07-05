@@ -43,6 +43,7 @@ export interface RunRequest {
     readonly description: string;
     readonly inputSchema?: RuneSchema;
   }[];
+  readonly predicates?: readonly any[];
 }
 
 export interface RunResult {
